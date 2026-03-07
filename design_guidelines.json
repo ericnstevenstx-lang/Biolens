@@ -1,0 +1,127 @@
+{
+  "branding": {
+    "app_name": "BioLens",
+    "tone": "Modern, Premium, Simple, Trustworthy, Consumer-friendly (Apple/Dyson inspired)",
+    "theme": "light",
+    "typography": {
+      "headings": {
+        "font_family": "Playfair Display, serif",
+        "weights": ["400", "600", "700"],
+        "usage": "All section titles, hero headlines, and feature names. Use tight tracking (-0.02em) for larger sizes."
+      },
+      "body": {
+        "font_family": "Inter, sans-serif",
+        "weights": ["300", "400", "500", "600"],
+        "usage": "Paragraphs, UI elements, buttons, navigation, data labels."
+      }
+    },
+    "colors": {
+      "background": {
+        "default": "#F5F5F7",
+        "paper": "#FFFFFF",
+        "dark_panel": "#1D1D1F"
+      },
+      "text": {
+        "primary": "#1D1D1F",
+        "secondary": "#86868B",
+        "inverted": "#F5F5F7"
+      },
+      "accent": {
+        "primary": "#B45309",
+        "secondary": "#C2410C",
+        "positive": "#15803d",
+        "risk_high": "#BE123C",
+        "risk_medium": "#F59E0B",
+        "risk_low": "#15803d"
+      },
+      "border": {
+        "subtle": "#E5E5E5",
+        "focus": "#B45309"
+      }
+    }
+  },
+  "layout": {
+    "container": {
+      "max_width": "max-w-7xl",
+      "padding": "px-6 md:px-12 lg:px-24",
+      "center": "mx-auto"
+    },
+    "spacing": {
+      "section_gap": "py-24 md:py-32",
+      "element_gap": "gap-6 md:gap-12"
+    },
+    "grid": {
+      "bento_materials": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+      "feature_row": "grid grid-cols-1 md:grid-cols-2 gap-16 items-center"
+    },
+    "border_radius": {
+      "card": "rounded-2xl",
+      "button": "rounded-full",
+      "input": "rounded-xl"
+    }
+  },
+  "ui_components": {
+    "buttons": {
+      "primary": "bg-[#1D1D1F] text-white hover:bg-[#333333] transition-all duration-300 shadow-lg hover:shadow-xl px-8 py-3 rounded-full font-medium text-sm tracking-wide",
+      "secondary": "bg-white text-[#1D1D1F] border border-[#E5E5E5] hover:border-[#1D1D1F] transition-all duration-300 px-8 py-3 rounded-full font-medium text-sm tracking-wide",
+      "accent": "bg-[#B45309] text-white hover:bg-[#9A4507] transition-all duration-300 shadow-md hover:shadow-lg px-8 py-3 rounded-full font-medium text-sm tracking-wide"
+    },
+    "cards": {
+      "glass": "bg-white/70 backdrop-blur-xl border border-white/20 shadow-sm hover:shadow-md transition-all duration-300",
+      "solid": "bg-white border border-[#E5E5E5] shadow-sm hover:shadow-md transition-all duration-300",
+      "dark": "bg-[#1D1D1F] text-white border border-[#333333]"
+    },
+    "inputs": {
+      "search_hero": "h-16 pl-6 pr-16 bg-white/80 backdrop-blur-md border border-[#E5E5E5] focus:border-[#B45309] focus:ring-1 focus:ring-[#B45309] text-lg rounded-2xl shadow-sm w-full transition-all duration-300"
+    }
+  },
+  "assets": {
+    "hero_abstract": "https://images.unsplash.com/photo-1768489002318-84c88f6f128d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODR8MHwxfHNlYXJjaHw0fHxtaW5pbWFsaXN0JTIwd2hpdGUlMjB0ZXh0dXJlJTIwb3JnYW5pYyUyMGxpZ2h0JTIwYWJzdHJhY3R8ZW58MHx8fHwxNzcyOTEyNjU4fDA&ixlib=rb-4.1.0&q=85",
+    "materials": {
+      "bamboo": "https://images.unsplash.com/photo-1562766057-90f7061eeff7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxiYW1ib28lMjB0ZXh0dXJlJTIwY2xvc2UlMjB1cCUyMG1pbmltYWxpc3R8ZW58MHx8fHwxNzcyOTEyNjU4fDA&ixlib=rb-4.1.0&q=85",
+      "recycled_plastic": "https://images.unsplash.com/photo-1745091946617-42ad33e30f08?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwzfHxyZWN5Y2xlZCUyMHBsYXN0aWMlMjBwZWxsZXQlMjB0ZXh0dXJlJTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzI5MTI2NjB8MA&ixlib=rb-4.1.0&q=85",
+      "cotton": "https://images.unsplash.com/photo-1770122985578-0fc7023eb6e8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwzfHxjb3R0b24lMjBmYWJyaWMlMjB0ZXh0dXJlJTIwbWFjcm8lMjB3aGl0ZXxlbnwwfHx8fDE3NzI5MTI2NjF8MA&ixlib=rb-4.1.0&q=85",
+      "glass": "https://images.unsplash.com/photo-1611089630144-e57a1e973467?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjd8MHwxfHNlYXJjaHwyfHxjbGVhciUyMGdsYXNzJTIwYm90dGxlJTIwc2hhZG93JTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzI5MTI2NjN8MA&ixlib=rb-4.1.0&q=85"
+    },
+    "products": {
+      "toothbrush": "https://images.pexels.com/photos/4202464/pexels-photo-4202464.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "tshirt": "https://images.unsplash.com/photo-1581655353564-df123a1eb820?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwyfHx3aGl0ZSUyMHQtc2hpcnQlMjBvbiUyMGhhbmdlciUyMG1pbmltYWxpc3R8ZW58MHx8fHwxNzcyOTEyNjY2fDA&ixlib=rb-4.1.0&q=85",
+      "shampoo": "https://images.unsplash.com/photo-1747858989102-cca0f4dc4a11?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxzaGFtcG9vJTIwYm90dGxlJTIwbWluaW1hbGlzdCUyMHBhY2thZ2luZ3xlbnwwfHx8fDE3NzI5MTI2Njd8MA&ixlib=rb-4.1.0&q=85"
+    }
+  },
+  "motion": {
+    "fade_up": "initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}",
+    "hover_lift": "whileHover={{ y: -4 }} transition={{ duration: 0.2 }}",
+    "stagger": "variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.1 } } }}"
+  },
+  "instructions_to_main_agent": {
+    "general": "You are building BioLens, a premium materials transparency tool. The aesthetic must be 'Apple/Dyson'—clean, sophisticated, gallery-like. NO e-commerce vibes. Focus on education and clarity.",
+    "fonts": "Import Playfair Display (400, 600, 700) and Inter (300, 400, 500, 600) from Google Fonts in index.html or CSS.",
+    "layout_rules": [
+      "Use massive whitespace. Sections should have py-24 or py-32.",
+      "Never center long text. Center headings only if the layout is symmetrical.",
+      "Use the 'Bento' grid for the 'Explore Materials' page.",
+      "The 'Petro-risk' level should use a color-coded badge or progress bar (Green = Low, Red = High)."
+    ],
+    "components": [
+      "Navbar: Sticky, glassmorphism (backdrop-blur-xl), simple logo on left, links on right, no big CTA.",
+      "Hero: Centered search bar (large, elegant), tagline in Playfair Display, subtle abstract background.",
+      "Results Page: Split layout or centered card focus. Show the 'Risk Level' prominently.",
+      "How It Works: 4-step horizontal process with icons/illustrations."
+    ]
+  },
+  "universal_guidelines": [
+    "You tend to converge toward generic outputs. Avoid this.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms.",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; }.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠 etc.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Subtle grain textures, noise overlays, custom cursors: separates good from extraordinary."
+  ]
+}
