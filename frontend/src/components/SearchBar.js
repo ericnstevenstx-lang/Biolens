@@ -21,9 +21,11 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
+  const [dropdownPos, setDropdownPos] = useState(null);
   const navigate = useNavigate();
   const inputRef = useRef(null);
   const wrapperRef = useRef(null);
+  const formRef = useRef(null);
   const debounceRef = useRef(null);
 
   // Placeholder cycling
@@ -42,11 +44,29 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     }
   }, [autoFocus]);
 
+  // Recalculate dropdown position on scroll
+  useEffect(() => {
+    if (!showSuggestions) return;
+    const updatePos = () => {
+      if (formRef.current) {
+        const rect = formRef.current.getBoundingClientRect();
+        setDropdownPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
+      }
+    };
+    window.addEventListener('scroll', updatePos, { passive: true });
+    window.addEventListener('resize', updatePos, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', updatePos);
+      window.removeEventListener('resize', updatePos);
+    };
+  }, [showSuggestions]);
+
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
         setShowSuggestions(false);
+        setActiveIdx(-1);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -104,7 +124,20 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
       }
 
       setSuggestions(results.slice(0, 6));
-      setShowSuggestions(results.length > 0);
+      if (results.length > 0) {
+        // Compute fixed position from form element
+        if (formRef.current) {
+          const rect = formRef.current.getBoundingClientRect();
+          setDropdownPos({
+            top: rect.bottom + 8,
+            left: rect.left,
+            width: rect.width,
+          });
+        }
+        setShowSuggestions(true);
+      } else {
+        setShowSuggestions(false);
+      }
       setActiveIdx(-1);
     } catch {
       setSuggestions([]);
@@ -158,8 +191,9 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const isLarge = size === "large";
 
   return (
-    <div ref={wrapperRef} className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`}>
+    <div ref={wrapperRef} className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`} style={{ zIndex: showSuggestions ? 60 : 'auto' }}>
       <form
+        ref={formRef}
         onSubmit={handleSubmit}
         data-testid="search-form"
         className="search-glow relative w-full transition-shadow duration-300"
@@ -180,7 +214,11 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
               setIsFocused(true);
               if (suggestions.length > 0) setShowSuggestions(true);
             }}
-            onBlur={() => setIsFocused(false)}
+            onBlur={() => {
+              setIsFocused(false);
+              // Delay hiding suggestions so onMouseDown on dropdown fires first
+              setTimeout(() => setShowSuggestions(false), 150);
+            }}
             onKeyDown={handleKeyDown}
             placeholder={`Try "${PLACEHOLDERS[placeholderIdx]}"`}
             autoComplete="off"
@@ -207,12 +245,19 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {/* Autocomplete dropdown */}
-      {showSuggestions && suggestions.length > 0 && (
+      {/* Autocomplete dropdown - fixed position to escape stacking context */}
+      {showSuggestions && suggestions.length > 0 && dropdownPos && (
         <div
           data-testid="autocomplete-dropdown"
-          className="absolute left-0 right-0 mt-2 bg-white rounded-xl border shadow-lg overflow-hidden z-[60]"
-          style={{ borderColor: '#E5E5E5' }}
+          className="bg-white rounded-xl border shadow-lg overflow-hidden"
+          style={{
+            position: 'fixed',
+            top: dropdownPos.top,
+            left: dropdownPos.left,
+            width: dropdownPos.width,
+            zIndex: 9999,
+            borderColor: '#E5E5E5',
+          }}
         >
           {suggestions.map((s, idx) => (
             <button
