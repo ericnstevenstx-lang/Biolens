@@ -77,7 +77,7 @@ export default function ScanHistory({ history, onClear }) {
               </p>
               <p
                 className="text-xs mb-2"
-                style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+                style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
               >
                 {item.materialName || "—"}
               </p>

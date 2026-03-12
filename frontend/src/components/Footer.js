@@ -16,7 +16,7 @@ export default function Footer() {
               <Search className="w-5 h-5" style={{ color: '#B45309' }} />
               <span
                 className="text-xl font-semibold tracking-tight"
-                style={{ fontFamily: "'Playfair Display', serif" }}
+                style={{ fontFamily: "'Manrope', sans-serif" }}
               >
                 BioLens
               </span>

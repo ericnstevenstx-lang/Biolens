@@ -20,7 +20,7 @@ function StatBlock({ icon, label, value, unit, color }) {
         <p className="flex items-baseline gap-1 mt-0.5">
           <span
             className="text-xl font-semibold tabular-nums"
-            style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+            style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
           >
             {value}
           </span>
@@ -75,7 +75,7 @@ export default function PurchaseImpact({ result }) {
             label="Est. Petro Cost per Unit"
             value={`$${impact.petroDollarsPerUnit}`}
             unit="petroleum input"
-            color="#BE123C"
+            color="#EF4444"
           />
         )}
 
@@ -93,7 +93,7 @@ export default function PurchaseImpact({ result }) {
             label="Carbon Proxy Savings"
             value={impact.carbonImprovement}
             unit="kg CO₂e / kg switched"
-            color="#15803d"
+            color="#22C55E"
           />
         )}
 
@@ -103,7 +103,7 @@ export default function PurchaseImpact({ result }) {
             label="Microplastic Shedding"
             value={impact.microplasticGrams}
             unit="g per wash cycle"
-            color="#EA580C"
+            color="#F97316"
           />
         )}
       </div>

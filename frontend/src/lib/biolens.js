@@ -12,11 +12,10 @@ export function getConfidenceLabel(score) {
 
 export function getPetroloadLevel(score) {
   if (score == null) return { label: "Unknown", color: "#86868B" };
-  if (score <= 15) return { label: "Very Low", color: "#15803d" };
-  if (score <= 35) return { label: "Low", color: "#22c55e" };
-  if (score <= 55) return { label: "Moderate", color: "#F59E0B" };
-  if (score <= 75) return { label: "High", color: "#EA580C" };
-  return { label: "Very High", color: "#BE123C" };
+  if (score <= 25) return { label: "Low", color: "#22C55E" };
+  if (score <= 50) return { label: "Moderate", color: "#EAB308" };
+  if (score <= 75) return { label: "High", color: "#F97316" };
+  return { label: "Very High", color: "#EF4444" };
 }
 
 export function getCategoryClass(materialClass) {

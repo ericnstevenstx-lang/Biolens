@@ -38,7 +38,7 @@ export default function HowItWorksPage() {
         <div className="max-w-2xl mb-20 animate-fade-up">
           <h1
             className="text-4xl sm:text-5xl font-semibold leading-tight mb-4"
-            style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+            style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
           >
             How BioLens works
           </h1>
@@ -79,7 +79,7 @@ export default function HowItWorksPage() {
                       <div style={{ color: '#B45309' }}>{step.icon}</div>
                       <h3
                         className="text-xl md:text-2xl font-semibold"
-                        style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+                        style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
                       >
                         {step.title}
                       </h3>
@@ -101,7 +101,7 @@ export default function HowItWorksPage() {
         <div className="mt-20 text-center animate-fade-up delay-600">
           <h2
             className="text-2xl sm:text-3xl font-semibold mb-4"
-            style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+            style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
           >
             Ready to try it?
           </h2>

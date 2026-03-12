@@ -192,7 +192,7 @@ export default function ShareCard({ result, query, onClose }) {
               </p>
 
               {/* Material */}
-              <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, fontWeight: 700, color: "#1D1D1F", marginBottom: 8, lineHeight: 1.2 }}>
+              <h2 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 36, fontWeight: 700, color: "#1D1D1F", marginBottom: 8, lineHeight: 1.2 }}>
                 {result.materialName}
               </h2>
               <p style={{ fontSize: 14, color: petroLevel.color, fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -205,7 +205,7 @@ export default function ShareCard({ result, query, onClose }) {
                   Petroload Score
                 </p>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 56, fontWeight: 700, color: petroLevel.color, lineHeight: 1 }}>
+                  <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 56, fontWeight: 700, color: petroLevel.color, lineHeight: 1 }}>
                     {result.petroloadScore ?? "—"}
                   </span>
                   <span style={{ fontSize: 18, color: "#86868B" }}>/ 100</span>
@@ -244,7 +244,7 @@ export default function ShareCard({ result, query, onClose }) {
 
             {/* Bottom branding */}
             <div style={{ borderTop: "1px solid #E5E5E5", paddingTop: 20 }}>
-              <p style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 600, color: "#1D1D1F", marginBottom: 4 }}>
+              <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 600, color: "#1D1D1F", marginBottom: 4 }}>
                 BioLens
               </p>
               <p style={{ fontSize: 12, color: "#86868B" }}>

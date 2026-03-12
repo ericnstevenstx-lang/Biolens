@@ -41,7 +41,7 @@ export default function Navbar() {
             <Search className="w-5 h-5" style={{ color: '#B45309' }} />
             <span
               className="text-xl font-semibold tracking-tight"
-              style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+              style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
             >
               BioLens
             </span>

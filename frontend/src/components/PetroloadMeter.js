@@ -68,7 +68,7 @@ export default function PetroloadMeter({ score, size = "large" }) {
           y={cy - (isLarge ? 20 : 12)}
           textAnchor="middle"
           style={{
-            fontFamily: "'Playfair Display', serif",
+            fontFamily: "'Manrope', sans-serif",
             fontSize: isLarge ? "2.2rem" : "1.4rem",
             fontWeight: 700,
             fill: "#1D1D1F",
