@@ -2,6 +2,7 @@ import { useRef, useCallback, useState } from "react";
 import html2canvas from "html2canvas";
 import { Share2, Download, X } from "lucide-react";
 import { getPetroloadLevel, getConfidenceLabel } from "@/lib/biolens";
+import { getMaterialDNA } from "@/components/MaterialDNA";
 
 /**
  * Shareable scan card component.
@@ -139,6 +140,7 @@ export default function ShareCard({ result, query, onClose }) {
   };
 
   const topAlts = (result.alternatives || []).slice(0, 3);
+  const dna = getMaterialDNA(result);
 
   return (
     <div
@@ -219,7 +221,23 @@ export default function ShareCard({ result, query, onClose }) {
               {topAlts.length > 0 && (
                 <div>
                   <p style={{ fontSize: 12, color: "#86868B", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
-                    Better Alternatives
+                    Material DNA
+                  </p>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 16 }}>
+                    {[
+                      { label: "Petroleum", pct: dna.petroleum, color: "#EF4444" },
+                      { label: "Natural", pct: dna.natural, color: "#22C55E" },
+                      { label: "Semi-Synthetic", pct: dna.hybrid, color: "#EAB308" },
+                    ].map(seg => (
+                      <div key={seg.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: seg.color }} />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#1D1D1F" }}>{seg.pct}%</span>
+                        <span style={{ fontSize: 11, color: "#86868B" }}>{seg.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ fontSize: 12, color: "#86868B", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>
+                    Better Alternative
                   </p>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {topAlts.map((alt) => (
@@ -230,8 +248,8 @@ export default function ShareCard({ result, query, onClose }) {
                           borderRadius: 999,
                           fontSize: 13,
                           fontWeight: 500,
-                          backgroundColor: "rgba(21, 128, 61, 0.08)",
-                          color: "#15803d",
+                          backgroundColor: "rgba(34, 197, 94, 0.08)",
+                          color: "#22C55E",
                         }}
                       >
                         {alt.name}
@@ -248,7 +266,7 @@ export default function ShareCard({ result, query, onClose }) {
                 BioLens
               </p>
               <p style={{ fontSize: 12, color: "#86868B" }}>
-                See what products are really made of.
+                Scan before you buy — BioLens
               </p>
             </div>
           </div>

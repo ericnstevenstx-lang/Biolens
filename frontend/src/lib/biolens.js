@@ -3,11 +3,11 @@ import { supabase } from "./supabase";
 // ─── Utility helpers ───────────────────────────────────────────
 
 export function getConfidenceLabel(score) {
-  if (score == null) return "Needs Review";
-  if (score >= 0.95) return "Verified";
-  if (score >= 0.85) return "Strong Match";
-  if (score >= 0.70) return "Likely Match";
-  return "Needs Review";
+  if (score == null) return "Preliminary Match";
+  if (score >= 0.95) return "High Confidence";
+  if (score >= 0.85) return "Moderate Confidence";
+  if (score >= 0.70) return "Estimated Profile";
+  return "Preliminary Match";
 }
 
 export function getPetroloadLevel(score) {
