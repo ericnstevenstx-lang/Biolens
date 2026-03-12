@@ -1,42 +1,51 @@
 # BioLens - Product Requirements Document
 
-## Original Problem Statement
-Build BioLens - a consumer-facing material intelligence tool connected to Supabase backend using search_biolens_scan_enriched() RPC.
-
 ## Architecture
-- **Frontend**: React + Tailwind + @supabase/supabase-js (direct RPC calls)
-- **Backend**: FastAPI (barcode proxy + static materials for Explore)
-- **Database**: Supabase (search_biolens_scan_enriched RPC) + MongoDB (analytics)
-- **Barcode**: react-zxing → Backend proxy → UPCitemdb/Open Food Facts
-- **Share**: html2canvas + Web Share API
-- **History**: localStorage (client-side)
+- **Frontend**: React + Tailwind + @supabase/supabase-js + html2canvas + react-zxing
+- **Backend**: FastAPI (barcode provider proxy + static materials for Explore)
+- **Database**: Supabase (search_biolens_scan_enriched RPC, materials, material_aliases) + MongoDB (analytics)
+- **Barcode**: react-zxing → Backend GS1-ready proxy → UPCitemdb/OpenFoodFacts/GS1
+- **Share**: html2canvas + Web Share API + Instagram Story download
+- **History**: localStorage
+- **PWA**: manifest.json + service worker + install prompt
 
-## What's Been Implemented (Feb-Mar 2026)
+## What's Implemented
 ### V1 - Static Rules MVP
 - Homepage, Results, How It Works, Explore Materials
-- Static rules DB (26 materials, 70+ product mappings)
+### V2 - Supabase + Barcode + Share
+- search_biolens_scan RPC, Petroload gauge, barcode scanning, share cards
+### V3 - Enriched + History
+- search_biolens_scan_enriched(), Material Health Score, Scan History
+### V4 - Full Feature Set (Current)
+- Purchase Impact Layer (4 stats: petro cost, jobs multiplier, carbon proxy, microplastic shedding)
+- GS1-ready barcode lookup with provider abstraction (env: BARCODE_PROVIDER, GS1_API_KEY, GS1_BASE_URL)
+- Search autocomplete from Supabase materials + aliases tables (position:fixed dropdown, keyboard + click)
+- PWA install (manifest.json, sw.js, install prompt, shell caching)
 
-### V2 - Supabase Integration
-- search_biolens_scan RPC integration
-- Petroload arc gauge, confidence labels, barcode scanning
-- Shareable scan cards (png/story download)
+## Env Vars Added
+- Frontend: REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_ANON_KEY
+- Backend: BARCODE_PROVIDER, GS1_API_KEY, GS1_BASE_URL
 
-### V3 - Bug Fix + Enriched + History (Current)
-- Fixed body-stream-already-read error (single response read pattern)
-- Switched to search_biolens_scan_enriched() RPC
-- Rows grouped by material_id before rendering
-- Added overall_material_health_score display (progress bar)
-- Added Scan History (localStorage, max 20 items, horizontal scroll)
-- History shows material class badge, petroload, timestamp
-- Clear history button
+## Files Changed (V4)
+- `/app/frontend/src/lib/impact.js` (NEW)
+- `/app/frontend/src/components/PurchaseImpact.js` (NEW)
+- `/app/frontend/src/components/InstallPrompt.js` (NEW)
+- `/app/frontend/public/manifest.json` (NEW)
+- `/app/frontend/public/sw.js` (NEW)
+- `/app/frontend/public/icon-192.png` (NEW)
+- `/app/frontend/public/icon-512.png` (NEW)
+- `/app/frontend/src/components/SearchBar.js` (UPDATED - autocomplete)
+- `/app/frontend/src/pages/ResultsPage.js` (UPDATED - PurchaseImpact)
+- `/app/frontend/src/App.js` (UPDATED - InstallPrompt)
+- `/app/frontend/public/index.html` (UPDATED - PWA meta tags)
+- `/app/backend/server.py` (UPDATED - GS1 provider abstraction)
+- `/app/backend/.env` (UPDATED - new env vars)
 
 ## Backlog
 ### P1
-- Purchase Impact Layer (economic impact)
-- FiberFoundry connection
+- FiberFoundry integration
 - Production GS1 API key
 ### P2
-- Search autocomplete
-- Material comparison tool
-- PWA for mobile install
+- Material comparison side-by-side
 - SEO meta tags per result
+- Offline search cache for common materials
