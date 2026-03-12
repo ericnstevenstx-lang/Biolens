@@ -18,6 +18,10 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Supabase config for barcode cache
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
@@ -613,16 +617,88 @@ BARCODE_PROVIDERS = {
 @api_router.post("/barcode/lookup", response_model=BarcodeResult)
 async def barcode_lookup(req: BarcodeRequest):
     """
-    Barcode identity lookup with provider abstraction.
-    Provider configured via BARCODE_PROVIDER env var.
-    Returns product identity only — material classification comes from Supabase.
+    Barcode identity lookup with full cascade:
+    1. product_barcodes (Supabase)
+    2. product_barcode_cache (Supabase)
+    3. External provider cascade (UPCitemdb, Open Food Facts, GS1)
+    4. Cache result back to Supabase product_barcode_cache
     """
     barcode = req.barcode.strip()
-    providers = BARCODE_PROVIDERS.get(BARCODE_PROVIDER, BARCODE_PROVIDERS["upcitemdb"])
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"} if SUPABASE_URL and SUPABASE_KEY else {}
 
+    # Step 1: Check product_barcodes in Supabase
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as c:
+                resp = await c.get(
+                    f"{SUPABASE_URL}/rest/v1/product_barcodes",
+                    params={"barcode": f"eq.{barcode}", "select": "product_title,brand_name,description"},
+                    headers={**headers, "Accept": "application/json"},
+                )
+                if resp.status_code == 200:
+                    rows = resp.json()
+                    if rows and len(rows) > 0:
+                        row = rows[0]
+                        logger.info(f"Barcode {barcode} found in product_barcodes")
+                        return BarcodeResult(
+                            barcode=barcode,
+                            title=row.get("product_title", ""),
+                            brand=row.get("brand_name", ""),
+                            description=row.get("description", ""),
+                            source="product_barcodes",
+                        )
+        except Exception as e:
+            logger.warning(f"product_barcodes lookup failed: {e}")
+
+    # Step 2: Check product_barcode_cache in Supabase
+    if SUPABASE_URL and SUPABASE_KEY:
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as c:
+                resp = await c.get(
+                    f"{SUPABASE_URL}/rest/v1/product_barcode_cache",
+                    params={"barcode": f"eq.{barcode}", "select": "title,brand,description,source"},
+                    headers={**headers, "Accept": "application/json"},
+                )
+                if resp.status_code == 200:
+                    rows = resp.json()
+                    if rows and len(rows) > 0:
+                        row = rows[0]
+                        logger.info(f"Barcode {barcode} found in product_barcode_cache")
+                        return BarcodeResult(
+                            barcode=barcode,
+                            title=row.get("title", ""),
+                            brand=row.get("brand", ""),
+                            description=row.get("description", ""),
+                            source=f"cache:{row.get('source', '')}",
+                        )
+        except Exception as e:
+            logger.warning(f"product_barcode_cache lookup failed: {e}")
+
+    # Step 3: External provider cascade
+    providers = BARCODE_PROVIDERS.get(BARCODE_PROVIDER, BARCODE_PROVIDERS["upcitemdb"])
     for provider_fn in providers:
         result = await provider_fn(barcode)
         if result and result.get("title"):
+            # Step 4: Cache result to Supabase product_barcode_cache
+            if SUPABASE_URL and SUPABASE_KEY:
+                try:
+                    async with httpx.AsyncClient(timeout=6.0) as c:
+                        await c.post(
+                            f"{SUPABASE_URL}/rest/v1/product_barcode_cache",
+                            json={
+                                "barcode": barcode,
+                                "title": result["title"],
+                                "brand": result.get("brand", ""),
+                                "description": result.get("description", ""),
+                                "source": result["source"],
+                            },
+                            headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
+                        )
+                        logger.info(f"Cached barcode {barcode} to product_barcode_cache")
+                except Exception as e:
+                    logger.warning(f"Failed to cache barcode: {e}")
+
+            # Also store in MongoDB for local analytics
             await db.barcode_lookups.insert_one({
                 "id": str(uuid.uuid4()),
                 "barcode": barcode,

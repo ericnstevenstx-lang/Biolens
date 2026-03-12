@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { fetchAutocomplete } from "@/lib/biolens";
 
 const PLACEHOLDERS = [
   "poly hoodie",
@@ -73,7 +73,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Autocomplete fetcher
+  // Autocomplete fetcher — uses Supabase RPC
   const fetchSuggestions = useCallback(async (text) => {
     if (text.length < 2) {
       setSuggestions([]);
@@ -82,50 +82,9 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     }
 
     try {
-      const term = `%${text.toLowerCase()}%`;
-
-      // Query materials and aliases in parallel
-      const [matRes, aliasRes] = await Promise.all([
-        supabase
-          .from("materials")
-          .select("material_name")
-          .ilike("material_name", term)
-          .limit(4),
-        supabase
-          .from("material_aliases")
-          .select("alias")
-          .ilike("alias", term)
-          .limit(4),
-      ]);
-
-      const results = [];
-      const seen = new Set();
-
-      // Materials first
-      if (matRes.data) {
-        for (const row of matRes.data) {
-          const label = row.material_name;
-          if (!seen.has(label.toLowerCase())) {
-            seen.add(label.toLowerCase());
-            results.push({ label, type: "material" });
-          }
-        }
-      }
-
-      // Then aliases
-      if (aliasRes.data) {
-        for (const row of aliasRes.data) {
-          const label = row.alias;
-          if (!seen.has(label.toLowerCase())) {
-            seen.add(label.toLowerCase());
-            results.push({ label, type: "alias" });
-          }
-        }
-      }
-
-      setSuggestions(results.slice(0, 6));
+      const results = await fetchAutocomplete(text, 6);
+      setSuggestions(results);
       if (results.length > 0) {
-        // Compute fixed position from form element
         if (formRef.current) {
           const rect = formRef.current.getBoundingClientRect();
           setDropdownPos({
@@ -164,10 +123,11 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     }
   };
 
-  const handleSelectSuggestion = (label) => {
-    setQuery(label);
+  const handleSelectSuggestion = (suggestion) => {
+    const term = suggestion.label || suggestion;
+    setQuery(term);
     setShowSuggestions(false);
-    navigate(`/results?q=${encodeURIComponent(label)}`);
+    navigate(`/results?q=${encodeURIComponent(term)}`);
   };
 
   const handleKeyDown = (e) => {
@@ -181,7 +141,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
       setActiveIdx((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
     } else if (e.key === "Enter" && activeIdx >= 0) {
       e.preventDefault();
-      handleSelectSuggestion(suggestions[activeIdx].label);
+      handleSelectSuggestion(suggestions[activeIdx]);
     } else if (e.key === "Escape") {
       setShowSuggestions(false);
       setActiveIdx(-1);
@@ -265,7 +225,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
               data-testid={`suggestion-${idx}`}
               onMouseDown={(e) => {
                 e.preventDefault();
-                handleSelectSuggestion(s.label);
+                handleSelectSuggestion(s);
               }}
               onMouseEnter={() => setActiveIdx(idx)}
               className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100"
@@ -281,6 +241,14 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
               >
                 {s.label}
               </span>
+              {s.materialName && s.materialName !== s.label && (
+                <span
+                  className="text-[0.6rem] ml-1"
+                  style={{ color: '#86868B' }}
+                >
+                  ({s.materialName})
+                </span>
+              )}
               <span
                 className="text-[0.65rem] ml-auto px-2 py-0.5 rounded-full"
                 style={{

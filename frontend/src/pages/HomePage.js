@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Scan, AlertTriangle, Leaf, ArrowRight, ChevronDown, ScanBarcode } from "lucide-react";
+import { Scan, AlertTriangle, Leaf, ArrowRight, ChevronDown, ScanBarcode, Globe, ShoppingBag, BarChart3, Droplets } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import BarcodeScanner from "@/components/BarcodeScanner";
 import ScanHistory from "@/components/ScanHistory";
-import { getScanHistory, clearScanHistory } from "@/lib/biolens";
+import { getScanHistory, clearScanHistory, fetchGlobalImpact } from "@/lib/biolens";
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -23,9 +23,11 @@ export default function HomePage() {
   const [showScanner, setShowScanner] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const [globalImpact, setGlobalImpact] = useState(null);
 
   useEffect(() => {
     setHistory(getScanHistory());
+    fetchGlobalImpact().then(data => { if (data) setGlobalImpact(data); }).catch(() => {});
   }, []);
 
   const handleClearHistory = () => {
@@ -230,6 +232,65 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Global Impact Counters */}
+      {globalImpact && (
+        <section
+          data-testid="global-impact-section"
+          className="py-16 md:py-24 px-6 md:px-12 lg:px-24"
+        >
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-10 animate-fade-up">
+              <h2
+                className="text-3xl sm:text-4xl font-semibold mb-3"
+                style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+              >
+                Community Impact
+              </h2>
+              <p
+                className="text-sm max-w-lg mx-auto"
+                style={{ fontFamily: "'Inter', sans-serif", color: '#86868B' }}
+              >
+                Every scan and conscious purchase contributes to a cleaner material economy.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+              {[
+                { label: "Total Scans", value: globalImpact.scans_total, icon: <BarChart3 className="w-5 h-5" />, color: "#B45309" },
+                { label: "Purchases", value: globalImpact.purchases_total, icon: <ShoppingBag className="w-5 h-5" />, color: "#15803d" },
+                { label: "Petro $ Replaced", value: globalImpact.petro_dollars_replaced != null ? `$${Number(globalImpact.petro_dollars_replaced).toLocaleString()}` : "0", icon: <Globe className="w-5 h-5" />, color: "#BE123C" },
+                { label: "Microplastic Avoided", value: globalImpact.microplastic_avoidance_units || 0, icon: <Droplets className="w-5 h-5" />, color: "#EA580C" },
+              ].map((stat) => (
+                <div
+                  key={stat.label}
+                  data-testid={`impact-stat-${stat.label.toLowerCase().replace(/\s+/g, '-')}`}
+                  className="card-lift bg-white rounded-2xl p-6 border text-center animate-fade-up"
+                  style={{ borderColor: '#E5E5E5' }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3"
+                    style={{ backgroundColor: `${stat.color}10`, color: stat.color }}
+                  >
+                    {stat.icon}
+                  </div>
+                  <p
+                    className="text-2xl font-semibold tabular-nums"
+                    style={{ fontFamily: "'Playfair Display', serif", color: '#1D1D1F' }}
+                  >
+                    {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
+                  </p>
+                  <p
+                    className="text-xs mt-1 font-medium"
+                    style={{ fontFamily: "'Inter', sans-serif", color: '#86868B' }}
+                  >
+                    {stat.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA section */}
       <section
