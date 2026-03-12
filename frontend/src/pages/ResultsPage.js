@@ -7,6 +7,7 @@ import {
 import SearchBar from "@/components/SearchBar";
 import PetroloadMeter from "@/components/PetroloadMeter";
 import ShareCard from "@/components/ShareCard";
+import PurchaseImpact from "@/components/PurchaseImpact";
 import {
   searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
   saveScanToHistory,
@@ -397,6 +398,9 @@ export default function ResultsPage() {
                 </div>
               </div>
             )}
+
+            {/* Purchase Impact */}
+            <PurchaseImpact result={result} />
 
             {/* No alternatives — good material */}
             {result.alternatives && result.alternatives.length === 0 && (

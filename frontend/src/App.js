@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import InstallPrompt from "@/components/InstallPrompt";
 import HomePage from "@/pages/HomePage";
 import ResultsPage from "@/pages/ResultsPage";
 import HowItWorksPage from "@/pages/HowItWorksPage";
@@ -21,6 +22,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <InstallPrompt />
       </BrowserRouter>
     </div>
   );

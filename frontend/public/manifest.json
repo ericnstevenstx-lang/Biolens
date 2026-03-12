@@ -1,0 +1,26 @@
+{
+  "short_name": "BioLens",
+  "name": "BioLens — See What Products Are Made Of",
+  "description": "Search or scan products to reveal their petrochemical dependency, material classification, and better alternatives.",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#B45309",
+  "background_color": "#F5F5F7",
+  "scope": "/",
+  "categories": ["education", "utilities", "lifestyle"]
+}

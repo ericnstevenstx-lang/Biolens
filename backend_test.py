@@ -277,6 +277,35 @@ class BioLensAPITester:
         
         return success, response
 
+    def test_barcode_provider_fields(self):
+        """Test barcode response contains GS1-ready fields (title, brand, description, source)"""
+        success, response = self.run_test(
+            "Barcode Lookup - GS1 Compatible Fields",
+            "POST",
+            "barcode/lookup",
+            200,
+            data={"barcode": "049000042566"},
+            expected_fields=["barcode", "title", "brand", "description", "source"]
+        )
+        
+        if success:
+            # Check the response structure follows GS1-ready format
+            expected_gs1_fields = ["title", "brand", "description", "source"]
+            for field in expected_gs1_fields:
+                if field in response:
+                    print(f"   ✓ GS1-ready field '{field}' present")
+                else:
+                    print(f"   ⚠️  GS1-ready field '{field}' missing")
+            
+            # Check if source indicates provider used
+            source = response.get("source")
+            if source:
+                print(f"   ✓ Provider source identified: {source}")
+            else:
+                print("   ⚠️  Provider source not specified")
+        
+        return success, response
+
 def main():
     print("🧪 BioLens API Testing Suite")
     print("=" * 50)
@@ -295,6 +324,7 @@ def main():
         tester.test_search_edge_cases,
         tester.test_barcode_lookup,
         tester.test_barcode_lookup_invalid,
+        tester.test_barcode_provider_fields,
     ]
     
     for test_method in test_methods:

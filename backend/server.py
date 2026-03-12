@@ -509,7 +509,12 @@ async def get_popular_searches():
     }
 
 
-# ─── Barcode Lookup (GS1 identity layer) ────────────────────────────────────
+# ─── Barcode Lookup (GS1-ready provider abstraction) ────────────────────────
+
+BARCODE_PROVIDER = os.environ.get("BARCODE_PROVIDER", "upcitemdb")
+GS1_API_KEY = os.environ.get("GS1_API_KEY", "")
+GS1_BASE_URL = os.environ.get("GS1_BASE_URL", "https://api.gs1.org/v1")
+
 
 class BarcodeRequest(BaseModel):
     barcode: str
@@ -518,25 +523,28 @@ class BarcodeResult(BaseModel):
     barcode: str
     title: Optional[str] = None
     brand: Optional[str] = None
+    description: Optional[str] = None
     source: Optional[str] = None
 
 
-async def lookup_upcitemdb(barcode: str) -> Optional[dict]:
-    """Look up product via UPCitemdb (broader consumer coverage)."""
+# ─── Provider interface ──────────────────────────────────────────────────────
+
+async def _lookup_upcitemdb(barcode: str) -> Optional[dict]:
+    """UPCitemdb provider (broad consumer product coverage)."""
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client_http:
-            resp = await client_http.get(
-                f"https://api.upcitemdb.com/prod/trial/lookup",
+        async with httpx.AsyncClient(timeout=8.0) as c:
+            resp = await c.get(
+                "https://api.upcitemdb.com/prod/trial/lookup",
                 params={"upc": barcode},
             )
             if resp.status_code == 200:
-                data = resp.json()
-                items = data.get("items", [])
+                items = resp.json().get("items", [])
                 if items:
                     item = items[0]
                     return {
                         "title": item.get("title", ""),
                         "brand": item.get("brand", ""),
+                        "description": item.get("description", ""),
                         "source": "upcitemdb",
                     }
     except Exception as e:
@@ -544,23 +552,22 @@ async def lookup_upcitemdb(barcode: str) -> Optional[dict]:
     return None
 
 
-async def lookup_openfoodfacts(barcode: str) -> Optional[dict]:
-    """Fallback lookup via Open Food Facts (food/beverage products)."""
+async def _lookup_openfoodfacts(barcode: str) -> Optional[dict]:
+    """Open Food Facts provider (food/beverage products)."""
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client_http:
-            resp = await client_http.get(
+        async with httpx.AsyncClient(timeout=8.0) as c:
+            resp = await c.get(
                 f"https://world.openfoodfacts.org/api/v2/product/{barcode}.json",
                 headers={"User-Agent": "BioLens/1.0"},
             )
             if resp.status_code == 200:
-                data = resp.json()
-                product = data.get("product", {})
+                product = resp.json().get("product", {})
                 name = product.get("product_name", "")
-                brand = product.get("brands", "")
                 if name:
                     return {
                         "title": name,
-                        "brand": brand,
+                        "brand": product.get("brands", ""),
+                        "description": product.get("generic_name", ""),
                         "source": "openfoodfacts",
                     }
     except Exception as e:
@@ -568,44 +575,66 @@ async def lookup_openfoodfacts(barcode: str) -> Optional[dict]:
     return None
 
 
+async def _lookup_gs1(barcode: str) -> Optional[dict]:
+    """GS1 API provider (production-grade, requires API key)."""
+    if not GS1_API_KEY:
+        logger.info("GS1 API key not configured, skipping")
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as c:
+            resp = await c.get(
+                f"{GS1_BASE_URL}/products/{barcode}",
+                headers={
+                    "Authorization": f"Bearer {GS1_API_KEY}",
+                    "Accept": "application/json",
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return {
+                    "title": data.get("productName", data.get("title", "")),
+                    "brand": data.get("brandName", data.get("brand", "")),
+                    "description": data.get("productDescription", ""),
+                    "source": "gs1",
+                }
+    except Exception as e:
+        logger.warning(f"GS1 lookup failed: {e}")
+    return None
+
+
+# Provider registry — order matters for fallback chain
+BARCODE_PROVIDERS = {
+    "gs1": [_lookup_gs1, _lookup_upcitemdb, _lookup_openfoodfacts],
+    "upcitemdb": [_lookup_upcitemdb, _lookup_openfoodfacts],
+    "openfoodfacts": [_lookup_openfoodfacts, _lookup_upcitemdb],
+}
+
+
 @api_router.post("/barcode/lookup", response_model=BarcodeResult)
 async def barcode_lookup(req: BarcodeRequest):
     """
-    Barcode identity lookup.
-    Order: UPCitemdb → Open Food Facts → fallback.
-    Returns product title/brand only — NOT material classification.
+    Barcode identity lookup with provider abstraction.
+    Provider configured via BARCODE_PROVIDER env var.
+    Returns product identity only — material classification comes from Supabase.
     """
     barcode = req.barcode.strip()
+    providers = BARCODE_PROVIDERS.get(BARCODE_PROVIDER, BARCODE_PROVIDERS["upcitemdb"])
 
-    # Try UPCitemdb first
-    result = await lookup_upcitemdb(barcode)
-    if result and result.get("title"):
-        # Track in MongoDB
-        await db.barcode_lookups.insert_one({
-            "id": str(uuid.uuid4()),
-            "barcode": barcode,
-            "title": result["title"],
-            "brand": result.get("brand", ""),
-            "source": result["source"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return BarcodeResult(barcode=barcode, **result)
+    for provider_fn in providers:
+        result = await provider_fn(barcode)
+        if result and result.get("title"):
+            await db.barcode_lookups.insert_one({
+                "id": str(uuid.uuid4()),
+                "barcode": barcode,
+                "title": result["title"],
+                "brand": result.get("brand", ""),
+                "description": result.get("description", ""),
+                "source": result["source"],
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            return BarcodeResult(barcode=barcode, **result)
 
-    # Fallback to Open Food Facts
-    result = await lookup_openfoodfacts(barcode)
-    if result and result.get("title"):
-        await db.barcode_lookups.insert_one({
-            "id": str(uuid.uuid4()),
-            "barcode": barcode,
-            "title": result["title"],
-            "brand": result.get("brand", ""),
-            "source": result["source"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return BarcodeResult(barcode=barcode, **result)
-
-    # No result found
-    return BarcodeResult(barcode=barcode, title=None, brand=None, source=None)
+    return BarcodeResult(barcode=barcode)
 
 
 # ─── App Setup ───────────────────────────────────────────────────────────────
