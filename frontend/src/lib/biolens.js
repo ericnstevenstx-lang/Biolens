@@ -54,7 +54,6 @@ export function getRiskConfig(riskLevel) {
  */
 function buildExplanation(row) {
   const explanation = row.explanation || "";
-  // If explanation looks like a real material explanation (more than a match label), use it
   if (
     explanation.length > 40 &&
     !explanation.toLowerCase().includes("match") &&
@@ -63,10 +62,8 @@ function buildExplanation(row) {
     return explanation;
   }
 
-  // Build a contextual explanation from the data
   const name = row.material_name || "This material";
   const cls = row.material_class || "Unknown";
-  const risk = row.risk_level || "Unknown";
 
   const classDescriptions = {
     "Petro-Based": `${name} is a petroleum-derived material. It depends on fossil fuel feedstocks and may contribute to microplastic pollution and environmental persistence.`,
@@ -76,15 +73,16 @@ function buildExplanation(row) {
     "Mineral Material": `${name} is a mineral-based material. It is typically durable, recyclable, and has low environmental toxicity compared to petroleum-based plastics.`,
   };
 
-  return classDescriptions[cls] || `${name} is classified as ${cls} with a ${risk.toLowerCase()} risk level.`;
+  return classDescriptions[cls] || `${name} is classified as ${cls}.`;
 }
 
 /**
- * Search BioLens via Supabase RPC.
- * Returns grouped result: { main material, alternatives[] }
+ * Search BioLens via Supabase RPC (enriched function).
+ * Uses search_biolens_scan_enriched which returns additional health scores.
+ * Groups rows by material_id before returning.
  */
 export async function searchBioLens(query) {
-  const { data, error } = await supabase.rpc("search_biolens_scan", {
+  const { data, error } = await supabase.rpc("search_biolens_scan_enriched", {
     user_query: query,
   });
 
@@ -97,37 +95,51 @@ export async function searchBioLens(query) {
     return null;
   }
 
-  // First row = main material
-  const primary = data[0];
+  // Group rows by material_id (each row = same material + one alternative)
+  const grouped = {};
+  for (const row of data) {
+    const mid = row.material_id;
+    if (!grouped[mid]) {
+      grouped[mid] = { primary: row, alternatives: [] };
+    }
+    if (row.alternative_material) {
+      grouped[mid].alternatives.push({
+        name: row.alternative_material,
+        materialClass: row.alternative_class,
+        reason: row.replacement_reason,
+        priority: row.alternative_priority,
+      });
+    }
+  }
+
+  // Use the first material group as the result
+  const firstGroup = Object.values(grouped)[0];
+  const primary = firstGroup.primary;
 
   // Convert petroload: Supabase returns 0-1 scale, we need 0-100
   let petroloadScore = null;
   if (primary.petroload_score != null) {
     petroloadScore = Math.round(primary.petroload_score * 100);
   } else {
-    // Derive from risk level if petroload is null
     const riskDefaults = { High: 72, Medium: 42, Low: 15 };
     petroloadScore = riskDefaults[primary.risk_level] || null;
   }
 
-  // Collect alternatives from all rows
-  const alternatives = data
-    .filter((row) => row.alternative_material)
-    .map((row) => ({
-      name: row.alternative_material,
-      materialClass: row.alternative_class,
-      reason: row.replacement_reason,
-      priority: row.alternative_priority,
-    }))
-    .sort((a, b) => (a.priority || 99) - (b.priority || 99));
+  // Overall material health score (0-1 from enriched, convert to 0-100)
+  let healthScore = null;
+  if (primary.overall_material_health_score != null) {
+    healthScore = Math.round(primary.overall_material_health_score * 100);
+  }
 
-  // Deduplicate alternatives by name
+  // Deduplicate and sort alternatives
   const seen = new Set();
-  const uniqueAlts = alternatives.filter((alt) => {
-    if (seen.has(alt.name)) return false;
-    seen.add(alt.name);
-    return true;
-  });
+  const uniqueAlts = firstGroup.alternatives
+    .sort((a, b) => (a.priority || 99) - (b.priority || 99))
+    .filter((alt) => {
+      if (seen.has(alt.name)) return false;
+      seen.add(alt.name);
+      return true;
+    });
 
   return {
     materialName: primary.material_name,
@@ -135,8 +147,72 @@ export async function searchBioLens(query) {
     materialClass: primary.material_class,
     riskLevel: primary.risk_level,
     petroloadScore,
+    healthScore,
     confidenceScore: primary.confidence_score,
     explanation: buildExplanation(primary),
     alternatives: uniqueAlts,
   };
+}
+
+// ─── Scan History (localStorage) ───────────────────────────────────────────
+
+const HISTORY_KEY = "biolens_scan_history";
+const MAX_HISTORY = 20;
+
+/**
+ * Get scan history from localStorage.
+ */
+export function getScanHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save a scan result to history.
+ */
+export function saveScanToHistory(query, result) {
+  if (!result) return;
+  const history = getScanHistory();
+
+  const entry = {
+    id: Date.now().toString(),
+    query,
+    materialName: result.materialName,
+    materialClass: result.materialClass,
+    riskLevel: result.riskLevel,
+    petroloadScore: result.petroloadScore,
+    healthScore: result.healthScore,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Remove duplicate queries
+  const filtered = history.filter(
+    (h) => h.query.toLowerCase() !== query.toLowerCase()
+  );
+
+  // Prepend new entry, cap at MAX_HISTORY
+  const updated = [entry, ...filtered].slice(0, MAX_HISTORY);
+
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  } catch {
+    // localStorage full or unavailable
+  }
+
+  return updated;
+}
+
+/**
+ * Clear scan history.
+ */
+export function clearScanHistory() {
+  try {
+    localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    // ignore
+  }
 }

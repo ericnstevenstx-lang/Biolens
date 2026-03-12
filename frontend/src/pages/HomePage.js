@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Scan, AlertTriangle, Leaf, ArrowRight, ChevronDown, ScanBarcode } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import BarcodeScanner from "@/components/BarcodeScanner";
+import ScanHistory from "@/components/ScanHistory";
+import { getScanHistory, clearScanHistory } from "@/lib/biolens";
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -20,6 +22,16 @@ export default function HomePage() {
   const navigate = useNavigate();
   const [showScanner, setShowScanner] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    setHistory(getScanHistory());
+  }, []);
+
+  const handleClearHistory = () => {
+    clearScanHistory();
+    setHistory([]);
+  };
 
   const scrollToCards = () => {
     document.getElementById("how-section")?.scrollIntoView({ behavior: "smooth" });
@@ -145,6 +157,18 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Scan History */}
+      {history.length > 0 && (
+        <section
+          data-testid="scan-history-section"
+          className="pb-8 px-6 md:px-12 lg:px-24"
+        >
+          <div className="max-w-7xl mx-auto">
+            <ScanHistory history={history} onClear={handleClearHistory} />
+          </div>
+        </section>
+      )}
 
       {/* Explainer cards */}
       <section

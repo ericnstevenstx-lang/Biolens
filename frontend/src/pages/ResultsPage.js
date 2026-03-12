@@ -9,6 +9,7 @@ import PetroloadMeter from "@/components/PetroloadMeter";
 import ShareCard from "@/components/ShareCard";
 import {
   searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
+  saveScanToHistory,
 } from "@/lib/biolens";
 
 const RISK_ICONS = {
@@ -37,6 +38,9 @@ export default function ResultsPage() {
       try {
         const data = await searchBioLens(query);
         setResult(data);
+        if (data) {
+          saveScanToHistory(query, data);
+        }
       } catch (err) {
         setError(err.message || "Something went wrong. Please try again.");
       } finally {
@@ -285,6 +289,41 @@ export default function ResultsPage() {
                       {result.explanation}
                     </p>
                   </div>
+
+                  {/* Material Health Score */}
+                  {result.healthScore != null && (
+                    <div className="mt-5 pt-5" style={{ borderTop: '1px solid #E5E5E5' }}>
+                      <p
+                        className="text-xs font-medium uppercase tracking-wider mb-2"
+                        style={{ fontFamily: "'Inter', sans-serif", color: '#86868B' }}
+                      >
+                        Material Health Score
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E5E5' }}>
+                          <div
+                            data-testid="health-score-bar"
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${result.healthScore}%`,
+                              backgroundColor: result.healthScore >= 60 ? '#15803d' : result.healthScore >= 40 ? '#F59E0B' : '#BE123C',
+                              transition: 'width 0.8s ease',
+                            }}
+                          />
+                        </div>
+                        <span
+                          data-testid="health-score-value"
+                          className="text-sm font-semibold tabular-nums"
+                          style={{
+                            fontFamily: "'Inter', sans-serif",
+                            color: result.healthScore >= 60 ? '#15803d' : result.healthScore >= 40 ? '#F59E0B' : '#BE123C',
+                          }}
+                        >
+                          {result.healthScore}/100
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
