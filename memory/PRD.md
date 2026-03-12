@@ -1,58 +1,56 @@
 # BioLens - Product Requirements Document
 
 ## Original Problem Statement
-Build a public web app called BioLens. A consumer-facing tool that helps people understand what everyday products are made from and whether those products are petroleum-based, plant-based, or transition materials.
+Build BioLens - a consumer-facing material intelligence tool connected to Supabase backend. Users search/scan products to see petrochemical dependency via petroload scores, material classification, and better alternatives.
 
 ## Architecture
-- **Backend**: FastAPI (Python) with static rules-based material database
-- **Frontend**: React with Tailwind CSS + Shadcn UI components
-- **Database**: MongoDB (search analytics tracking)
-- **No authentication** - fully public app
+- **Frontend**: React + Tailwind CSS + Shadcn UI + @supabase/supabase-js
+- **Backend**: FastAPI (barcode proxy + static materials for Explore page)
+- **Database**: Supabase (search_biolens_scan RPC) + MongoDB (analytics)
+- **Barcode**: react-zxing (ZXing) → Backend proxy → UPCitemdb/Open Food Facts
+- **Share**: html2canvas (client-side) + Web Share API
 
-## User Personas
-- General consumers wanting to understand product materials
-- Eco-conscious shoppers seeking material transparency
-- Educators teaching about materials and sustainability
-
-## Core Requirements (Static)
-1. Product search → material classification
-2. Petro-risk level assessment (High/Medium/Low)
-3. Material explanation in plain language
-4. Better material alternatives suggestions
-5. Explore Materials library with filtering
-6. How It Works educational page
+## Core Requirements
+1. Product search → Supabase search_biolens_scan() → material classification
+2. Petroload score visualization (0-100 arc gauge)
+3. Confidence labels (Verified/Strong Match/Likely Match/Needs Review)
+4. Better alternatives with replacement reasons
+5. Barcode scanning via phone camera
+6. Shareable scan cards (PNG download + native share + Instagram Story format)
+7. Explore Materials library with category filtering
 
 ## What's Been Implemented (Feb 2026)
-- [x] Homepage with hero, search bar, rotating placeholders, example chips, 3 explainer cards, dark CTA section
-- [x] Results page with material classification, risk badges, explanation, alternatives, "Find Better Materials" CTA
-- [x] How It Works page with 4-step visual process
-- [x] Explore Materials page with bento grid, category filters (6 filters), 26 materials
-- [x] Glassmorphism navbar with mobile hamburger menu
-- [x] Dark footer with navigation and about sections
-- [x] Backend: 26 materials database, 70+ product-to-material mappings, search analytics
-- [x] API endpoints: POST /api/search, GET /api/materials, GET /api/materials/{slug}, GET /api/search/popular
-- [x] Bamboo rayon correctly classified as Transition Material (not plant-based)
+### V1 (Static Rules)
+- [x] Homepage, Results, How It Works, Explore Materials pages
+- [x] Static rules database with 26 materials and 70+ product mappings
 - [x] Premium Apple/Dyson aesthetic with Playfair Display + Inter fonts
-- [x] Color scheme: off-white bg, charcoal text, copper accent, graphite dark panels
+
+### V2 (Supabase Integration)
+- [x] Supabase RPC integration (search_biolens_scan)
+- [x] Petroload arc gauge meter (0-100 scale, color-coded)
+- [x] Confidence score → label conversion
+- [x] Barcode scanner (ZXing react-zxing library)
+- [x] Backend barcode lookup proxy (UPCitemdb → Open Food Facts fallback)
+- [x] Share This Scan modal with html2canvas
+- [x] Web Share API (mobile) + Download + Instagram Story format
+- [x] Grouped alternatives with replacement reasons from Supabase
+- [x] Scan Product button on homepage
+- [x] Updated example searches (poly hoodie, bamboo sheets, pet bottle, etc.)
 
 ## Prioritized Backlog
-### P0 (Critical)
-- None - MVP complete
-
+### P0 - None (MVP complete)
 ### P1 (High)
-- Connect to FiberFoundry when ready
-- Add more product-to-material mappings
-- Search autocomplete/suggestions dropdown
-
+- Purchase Impact Layer (future phase)
+- Connect to FiberFoundry
+- GS1 direct API integration (replace trial APIs)
 ### P2 (Medium)
-- Material detail pages (dedicated routes per material)
-- Search history / popular searches display
-- Share results functionality
-- SEO meta tags per page
+- Search history / recent scans
+- Material comparison tool
+- SEO meta tags per result
+- Progressive Web App (PWA) for mobile install
 
 ## Next Tasks
-1. Expand product mapping database (more consumer products)
-2. Add material detail pages with deeper content
-3. Implement search autocomplete
-4. Add social sharing for results
-5. Connect FiberFoundry CTA when API is available
+1. Purchase Impact Layer (economic impact of buying better materials)
+2. Direct GS1 API key for production barcode lookups
+3. Search autocomplete from Supabase
+4. PWA configuration for mobile home screen install
