@@ -1,25 +1,61 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Scan, AlertTriangle, Leaf, ArrowRight, ChevronDown } from "lucide-react";
+import { Scan, AlertTriangle, Leaf, ArrowRight, ChevronDown, ScanBarcode } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
+import BarcodeScanner from "@/components/BarcodeScanner";
+import axios from "axios";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const EXAMPLE_SEARCHES = [
-  "polyester hoodie",
+  "poly hoodie",
+  "bamboo sheets",
+  "pet bottle",
+  "vegan leather bag",
   "plastic cutting board",
   "nylon rope",
-  "bamboo sheets",
-  "wool sweater",
-  "glass bottle",
 ];
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
 
   const scrollToCards = () => {
     document.getElementById("how-section")?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const handleBarcodeScan = async (barcode) => {
+    setShowScanner(false);
+    setScanLoading(true);
+    try {
+      // Lookup barcode via backend proxy
+      const res = await axios.post(`${API}/barcode/lookup`, { barcode });
+      const product = res.data;
+      if (product && product.title) {
+        navigate(`/results?q=${encodeURIComponent(product.title)}&barcode=${encodeURIComponent(barcode)}`);
+      } else {
+        // Fallback: use barcode number as query
+        navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
+      }
+    } catch (err) {
+      // Fallback: use barcode number
+      navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   return (
     <div data-testid="home-page">
+      {/* Barcode Scanner Modal */}
+      {showScanner && (
+        <BarcodeScanner
+          onScan={handleBarcodeScan}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
+
       {/* Hero */}
       <section
         data-testid="hero-section"
@@ -39,8 +75,8 @@ export default function HomePage() {
               className="mt-6 text-base md:text-lg leading-relaxed animate-fade-up delay-100 max-w-xl"
               style={{ fontFamily: "'Inter', sans-serif", color: '#86868B' }}
             >
-              Search everyday products and instantly learn whether they are
-              petroleum-based, plant-based, or transition materials.
+              Search or scan everyday products and instantly learn their petrochemical dependency,
+              material classification, and better alternatives.
             </p>
 
             {/* Search bar */}
@@ -48,10 +84,23 @@ export default function HomePage() {
               <SearchBar size="large" />
             </div>
 
+            {/* Scan button */}
+            <div className="mt-4 animate-fade-up delay-300">
+              <button
+                data-testid="scan-product-button"
+                onClick={() => setShowScanner(true)}
+                disabled={scanLoading}
+                className="btn-pill btn-accent flex items-center gap-2"
+              >
+                <ScanBarcode className="w-4 h-4" />
+                {scanLoading ? "Looking up product..." : "Scan Product"}
+              </button>
+            </div>
+
             {/* Quick examples */}
-            <div className="mt-6 flex flex-wrap gap-2 animate-fade-up delay-300">
+            <div className="mt-6 flex flex-wrap gap-2 animate-fade-up delay-400">
               <span
-                className="text-xs font-medium mr-1"
+                className="text-xs font-medium mr-1 self-center"
                 style={{ fontFamily: "'Inter', sans-serif", color: '#86868B' }}
               >
                 Try:
@@ -83,7 +132,7 @@ export default function HomePage() {
             </div>
 
             {/* CTAs */}
-            <div className="mt-10 flex flex-wrap gap-4 animate-fade-up delay-400">
+            <div className="mt-10 flex flex-wrap gap-4 animate-fade-up delay-500">
               <button
                 data-testid="cta-how-it-works"
                 onClick={scrollToCards}
@@ -109,21 +158,21 @@ export default function HomePage() {
               {
                 icon: <Scan className="w-6 h-6" />,
                 title: "Material Check",
-                description: "Find out whether a product is petroleum-based, plant-based, or transitional.",
+                description: "Find out whether a product is petroleum-based, plant-based, or transitional. See its Petroload score instantly.",
                 color: "#B45309",
                 delay: "delay-100",
               },
               {
                 icon: <AlertTriangle className="w-6 h-6" />,
                 title: "Why It Matters",
-                description: "Learn about plastics, microplastics, and better material options.",
+                description: "Understand petrochemical dependency in everyday products and its environmental impact.",
                 color: "#BE123C",
                 delay: "delay-200",
               },
               {
                 icon: <Leaf className="w-6 h-6" />,
                 title: "Better Alternatives",
-                description: "See materials that can replace petroleum-heavy products.",
+                description: "Discover materials that can replace petroleum-heavy products with lower environmental impact.",
                 color: "#15803d",
                 delay: "delay-300",
               },

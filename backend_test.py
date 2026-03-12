@@ -230,6 +230,53 @@ class BioLensAPITester:
                 
         return all_passed, {}
 
+    def test_barcode_lookup(self):
+        """Test barcode lookup endpoint - should return product info or empty result"""
+        # Test with a common UPC barcode (Coca-Cola)
+        success, response = self.run_test(
+            "Barcode Lookup - Valid UPC",
+            "POST",
+            "barcode/lookup",
+            200,
+            data={"barcode": "049000042566"},
+            expected_fields=["barcode"]
+        )
+        
+        if success:
+            barcode = response.get("barcode")
+            title = response.get("title")
+            if barcode == "049000042566":
+                print("   ✓ Barcode correctly returned in response")
+            if title:
+                print(f"   ✓ Product found: {title}")
+            else:
+                print("   ℹ️  No product title found (acceptable for test barcode)")
+        
+        return success, response
+
+    def test_barcode_lookup_invalid(self):
+        """Test barcode lookup with invalid barcode"""
+        success, response = self.run_test(
+            "Barcode Lookup - Invalid UPC",
+            "POST",
+            "barcode/lookup",
+            200,
+            data={"barcode": "123456789"},
+            expected_fields=["barcode"]
+        )
+        
+        if success:
+            barcode = response.get("barcode")
+            title = response.get("title")
+            if barcode == "123456789":
+                print("   ✓ Barcode correctly returned in response")
+            if not title:
+                print("   ✓ No product found for invalid barcode (expected)")
+            else:
+                print(f"   ⚠️  Unexpected product found for invalid barcode: {title}")
+        
+        return success, response
+
 def main():
     print("🧪 BioLens API Testing Suite")
     print("=" * 50)
@@ -246,6 +293,8 @@ def main():
         tester.test_get_all_materials,
         tester.test_get_popular_searches,
         tester.test_search_edge_cases,
+        tester.test_barcode_lookup,
+        tester.test_barcode_lookup_invalid,
     ]
     
     for test_method in test_methods:

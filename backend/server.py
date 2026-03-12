@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -496,16 +497,115 @@ async def get_material(slug: str):
 async def get_popular_searches():
     return {
         "examples": [
-            "polyester hoodie",
+            "poly hoodie",
+            "bamboo sheets",
+            "pet bottle",
+            "vegan leather bag",
             "plastic cutting board",
-            "bamboo rayon dress",
             "nylon rope",
-            "microfiber blanket",
             "wool sweater",
-            "glass bottle",
             "hemp shirt",
         ]
     }
+
+
+# ─── Barcode Lookup (GS1 identity layer) ────────────────────────────────────
+
+class BarcodeRequest(BaseModel):
+    barcode: str
+
+class BarcodeResult(BaseModel):
+    barcode: str
+    title: Optional[str] = None
+    brand: Optional[str] = None
+    source: Optional[str] = None
+
+
+async def lookup_upcitemdb(barcode: str) -> Optional[dict]:
+    """Look up product via UPCitemdb (broader consumer coverage)."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client_http:
+            resp = await client_http.get(
+                f"https://api.upcitemdb.com/prod/trial/lookup",
+                params={"upc": barcode},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("items", [])
+                if items:
+                    item = items[0]
+                    return {
+                        "title": item.get("title", ""),
+                        "brand": item.get("brand", ""),
+                        "source": "upcitemdb",
+                    }
+    except Exception as e:
+        logger.warning(f"UPCitemdb lookup failed: {e}")
+    return None
+
+
+async def lookup_openfoodfacts(barcode: str) -> Optional[dict]:
+    """Fallback lookup via Open Food Facts (food/beverage products)."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client_http:
+            resp = await client_http.get(
+                f"https://world.openfoodfacts.org/api/v2/product/{barcode}.json",
+                headers={"User-Agent": "BioLens/1.0"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                product = data.get("product", {})
+                name = product.get("product_name", "")
+                brand = product.get("brands", "")
+                if name:
+                    return {
+                        "title": name,
+                        "brand": brand,
+                        "source": "openfoodfacts",
+                    }
+    except Exception as e:
+        logger.warning(f"Open Food Facts lookup failed: {e}")
+    return None
+
+
+@api_router.post("/barcode/lookup", response_model=BarcodeResult)
+async def barcode_lookup(req: BarcodeRequest):
+    """
+    Barcode identity lookup.
+    Order: UPCitemdb → Open Food Facts → fallback.
+    Returns product title/brand only — NOT material classification.
+    """
+    barcode = req.barcode.strip()
+
+    # Try UPCitemdb first
+    result = await lookup_upcitemdb(barcode)
+    if result and result.get("title"):
+        # Track in MongoDB
+        await db.barcode_lookups.insert_one({
+            "id": str(uuid.uuid4()),
+            "barcode": barcode,
+            "title": result["title"],
+            "brand": result.get("brand", ""),
+            "source": result["source"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return BarcodeResult(barcode=barcode, **result)
+
+    # Fallback to Open Food Facts
+    result = await lookup_openfoodfacts(barcode)
+    if result and result.get("title"):
+        await db.barcode_lookups.insert_one({
+            "id": str(uuid.uuid4()),
+            "barcode": barcode,
+            "title": result["title"],
+            "brand": result.get("brand", ""),
+            "source": result["source"],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return BarcodeResult(barcode=barcode, **result)
+
+    # No result found
+    return BarcodeResult(barcode=barcode, title=None, brand=None, source=None)
 
 
 # ─── App Setup ───────────────────────────────────────────────────────────────

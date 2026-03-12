@@ -230,3 +230,16 @@
   0%, 90%, 100% { opacity: 1; }
   95% { opacity: 0; }
 }
+
+/* Barcode scan line animation */
+@keyframes scanLine {
+  0% { top: 4px; }
+  50% { top: calc(100% - 6px); }
+  100% { top: 4px; }
+}
+
+/* Confidence badge pulse for verified */
+@keyframes verifiedPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

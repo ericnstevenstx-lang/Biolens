@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
 
 const PLACEHOLDERS = [
-  "polyester hoodie",
+  "poly hoodie",
+  "bamboo sheets",
+  "pet bottle",
+  "vegan leather bag",
   "plastic cutting board",
-  "bamboo rayon dress",
   "nylon rope",
-  "microfiber blanket",
   "wool sweater",
-  "glass bottle",
   "hemp shirt",
 ];
 
