@@ -1,51 +1,56 @@
-# BioLens - Product Requirements Document
+# BioLens — Product Requirements Document
+
+## Problem Statement
+Build a public web app called **BioLens** that helps consumers understand the material composition of everyday products, classifying them as petroleum-based, plant-based, etc., and providing a "Petroload" score. The app integrates with a live **FiberFoundry** demo catalog to recommend verified, sustainable alternatives.
+
+## Tech Stack
+- **Frontend:** React, Tailwind CSS, react-router-dom, Supabase JS client
+- **Backend:** FastAPI (Python), MongoDB (analytics), Supabase (data source)
+- **BaaS:** Supabase (RPC functions, views, tables)
+- **Barcode:** @zxing/library, backend provider cascade (UPCitemdb, Open Food Facts, GS1)
+- **PWA:** Service Worker, Web App Manifest
+
+## Core Features
+1. Search/Scan products → Material analysis via `search_biolens_scan_enriched()`
+2. Petroload Score + Material Health Score
+3. Risk Signals (pesticide, herbicide, fertilizer, processing chemicals)
+4. Better Alternatives (material-level)
+5. Where to Buy (FiberFoundry-first product cards with transparency/trust/petroload scores)
+6. Purchase Impact (estimated metrics)
+7. Global Impact Counters on homepage
+8. Search Autocomplete via `search_biolens_autocomplete()` RPC
+9. Barcode Scanning with 3-step cache cascade
+10. Scan History (localStorage)
+11. Shareable Scan Card (html2canvas)
+12. PWA installability
 
 ## Architecture
-- **Frontend**: React + Tailwind + @supabase/supabase-js + html2canvas + react-zxing
-- **Backend**: FastAPI (barcode provider proxy + static materials for Explore)
-- **Database**: Supabase (search_biolens_scan_enriched RPC, materials, material_aliases) + MongoDB (analytics)
-- **Barcode**: react-zxing → Backend GS1-ready proxy → UPCitemdb/OpenFoodFacts/GS1
-- **Share**: html2canvas + Web Share API + Instagram Story download
-- **History**: localStorage
-- **PWA**: manifest.json + service worker + install prompt
+```
+Frontend (React) → Supabase (RPC/views) for all business logic
+Frontend (React) → Backend (FastAPI) only for barcode resolution
+Backend → Supabase (product_barcodes, product_barcode_cache) → External providers
+```
 
-## What's Implemented
-### V1 - Static Rules MVP
-- Homepage, Results, How It Works, Explore Materials
-### V2 - Supabase + Barcode + Share
-- search_biolens_scan RPC, Petroload gauge, barcode scanning, share cards
-### V3 - Enriched + History
-- search_biolens_scan_enriched(), Material Health Score, Scan History
-### V4 - Full Feature Set (Current)
-- Purchase Impact Layer (4 stats: petro cost, jobs multiplier, carbon proxy, microplastic shedding)
-- GS1-ready barcode lookup with provider abstraction (env: BARCODE_PROVIDER, GS1_API_KEY, GS1_BASE_URL)
-- Search autocomplete from Supabase materials + aliases tables (position:fixed dropdown, keyboard + click)
-- PWA install (manifest.json, sw.js, install prompt, shell caching)
+## Supabase Functions Used (LIVE)
+- `search_biolens_scan_enriched(user_query text)` — Primary scan
+- `search_biolens_autocomplete(user_query text, p_limit integer)` — Autocomplete
+- `get_best_alternative_products_for_query(user_query text, p_limit integer)` — Product alternatives
+- `get_product_purchase_sources(p_product_id uuid)` — Purchase links
+- `get_global_impact_counters()` — Sitewide stats
 
-## Env Vars Added
-- Frontend: REACT_APP_SUPABASE_URL, REACT_APP_SUPABASE_ANON_KEY
-- Backend: BARCODE_PROVIDER, GS1_API_KEY, GS1_BASE_URL
+## Purchase Redirection Rules
+- If FiberFoundry has matching alternative → show ONLY FiberFoundry products (exclusive placement)
+- If no FiberFoundry match → show up to 3 trusted external sources
+- No price hunting, comparison shopping, or marketplace clutter
 
-## Files Changed (V4)
-- `/app/frontend/src/lib/impact.js` (NEW)
-- `/app/frontend/src/components/PurchaseImpact.js` (NEW)
-- `/app/frontend/src/components/InstallPrompt.js` (NEW)
-- `/app/frontend/public/manifest.json` (NEW)
-- `/app/frontend/public/sw.js` (NEW)
-- `/app/frontend/public/icon-192.png` (NEW)
-- `/app/frontend/public/icon-512.png` (NEW)
-- `/app/frontend/src/components/SearchBar.js` (UPDATED - autocomplete)
-- `/app/frontend/src/pages/ResultsPage.js` (UPDATED - PurchaseImpact)
-- `/app/frontend/src/App.js` (UPDATED - InstallPrompt)
-- `/app/frontend/public/index.html` (UPDATED - PWA meta tags)
-- `/app/backend/server.py` (UPDATED - GS1 provider abstraction)
-- `/app/backend/.env` (UPDATED - new env vars)
+## What's Implemented (as of March 12, 2026)
+- [x] V1 MVP — static rules engine
+- [x] V2 Supabase Integration — search_biolens_scan_enriched
+- [x] V3 Bug fixes + Scan History
+- [x] V4 Purchase Impact, Autocomplete, PWA, Barcode abstraction
+- [x] V5 Final FiberFoundry Integration — all Supabase RPCs live, Where to Buy section, Risk Signals, Global Impact Counters, autocomplete via RPC, barcode cascade with Supabase cache
 
 ## Backlog
-### P1
-- FiberFoundry integration
-- Production GS1 API key
-### P2
-- Material comparison side-by-side
-- SEO meta tags per result
-- Offline search cache for common materials
+- P1: Product comparison (side-by-side petroload scores)
+- P2: Offline material cache for common queries
+- P2: Production GS1 barcode provider key swap
