@@ -630,11 +630,14 @@ async def barcode_lookup(req: BarcodeRequest):
     if SUPABASE_URL and SUPABASE_KEY:
         try:
             async with httpx.AsyncClient(timeout=6.0) as c:
-                resp = await c.get(
-                    f"{SUPABASE_URL}/rest/v1/product_barcodes",
-                    params={"barcode": f"eq.{barcode}", "select": "product_title,brand_name,description"},
-                    headers={**headers, "Accept": "application/json"},
-                )
+            resp = await c.get(
+    f"{SUPABASE_URL}/rest/v1/product_barcode_cache",
+    params={
+        "gtin": f"eq.{barcode}",
+        "select": "product_title,brand_name,category_name,description,data_source"
+    },
+    headers={**headers, "Accept": "application/json"},
+)
                 if resp.status_code == 200:
                     rows = resp.json()
                     if rows and len(rows) > 0:
