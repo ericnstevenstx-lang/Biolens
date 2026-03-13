@@ -686,17 +686,18 @@ async def barcode_lookup(req: BarcodeRequest):
             if SUPABASE_URL and SUPABASE_KEY:
                 try:
                     async with httpx.AsyncClient(timeout=6.0) as c:
-                        await c.post(
-                            f"{SUPABASE_URL}/rest/v1/product_barcode_cache",
-                            json={
-                                "barcode": barcode,
-                                "title": result["title"],
-                                "brand": result.get("brand", ""),
-                                "description": result.get("description", ""),
-                                "source": result["source"],
-                            },
-                            headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
-                        )
+                       await c.post(
+    f"{SUPABASE_URL}/rest/v1/product_barcode_cache",
+    json={
+        "gtin": barcode,
+        "product_title": result["title"],
+        "brand_name": result.get("brand", ""),
+        "category_name": result.get("category", ""),
+        "description": result.get("description", ""),
+        "data_source": result["source"],
+        "last_resolved_at": datetime.now(timezone.utc).isoformat(),
+    },
+    headers={**headers, "Content-Type": "application/json", "Prefer": "return=minimal"},
                         logger.info(f"Cached barcode {barcode} to product_barcode_cache")
                 except Exception as e:
                     logger.warning(f"Failed to cache barcode: {e}")
