@@ -667,13 +667,13 @@ async def barcode_lookup(req: BarcodeRequest):
                     if rows and len(rows) > 0:
                         row = rows[0]
                         logger.info(f"Barcode {barcode} found in product_barcode_cache")
-                        return BarcodeResult(
-                            barcode=barcode,
-                            title=row.get("title", ""),
-                            brand=row.get("brand", ""),
-                            description=row.get("description", ""),
-                            source=f"cache:{row.get('source', '')}",
-                        )
+                      return BarcodeResult(
+    barcode=barcode,
+    title=row.get("product_title", ""),
+    brand=row.get("brand_name", ""),
+    description=row.get("description", ""),
+    source=f"cache:{row.get('data_source', '')}",
+)
         except Exception as e:
             logger.warning(f"product_barcode_cache lookup failed: {e}")
 
