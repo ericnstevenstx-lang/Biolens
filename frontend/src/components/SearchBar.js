@@ -18,8 +18,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const [query, setQuery] = useState(initialQuery);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
-  
-  // ✅ SAFE STATE INITIALIZATION
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -63,14 +61,12 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
 
     try {
       const results = await fetchAutocomplete(text, 6);
-      // ✅ CRITICAL SAFETY CHECK: Ensure results is always an array
       const validResults = Array.isArray(results) ? results : [];
       setSuggestions(validResults);
       setShowSuggestions(validResults.length > 0);
       setActiveIdx(-1);
     } catch (error) {
       console.error("Autocomplete error:", error);
-      // ✅ SAFE FALLBACK: Always set to empty array on error
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -104,7 +100,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   };
 
   const handleKeyDown = (e) => {
-    // ✅ COMPREHENSIVE SAFETY CHECK: Verify suggestions exists and is array
     if (!showSuggestions || !Array.isArray(suggestions) || suggestions.length === 0) return;
 
     if (e.key === "ArrowDown") {
@@ -128,7 +123,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     <div 
       ref={wrapperRef} 
       className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`}
-      style={{ zIndex: showSuggestions ? 60 : 'auto' }}
+      style={{ zIndex: showSuggestions ? 100 : 10 }}
     >
       <form
         onSubmit={handleSubmit}
@@ -149,7 +144,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
             onChange={handleChange}
             onFocus={() => {
               setIsFocused(true);
-              // ✅ SAFE ACCESS: Check array before accessing length
               if (Array.isArray(suggestions) && suggestions.length > 0) {
                 setShowSuggestions(true);
               }
@@ -161,7 +155,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
             onKeyDown={handleKeyDown}
             placeholder={`Try "${PLACEHOLDERS[placeholderIdx]}"`}
             autoComplete="off"
-            className={`w-full bg-white/80 backdrop-blur-md border focus:outline-none ${isLarge ? 'h-16 pl-14 pr-16 text-lg rounded-2xl' : 'h-12 pl-12 pr-14 text-sm rounded-xl'}`}
+            className={`w-full bg-white border focus:outline-none ${isLarge ? 'h-16 pl-14 pr-16 text-lg rounded-2xl' : 'h-12 pl-12 pr-14 text-sm rounded-xl'}`}
             style={{
               fontFamily: "'Inter', sans-serif",
               color: '#1D1D1F',
@@ -184,20 +178,25 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {/* ✅ TRIPLE SAFETY CHECK: Verify showSuggestions, array type, and length */}
       {showSuggestions && Array.isArray(suggestions) && suggestions.length > 0 && (
         <div
           data-testid="autocomplete-dropdown"
-          className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border shadow-2xl overflow-hidden z-50"
-          style={{ borderColor: '#E5E5E5' }}
+          className="absolute top-full left-0 right-0 mt-2 rounded-xl border shadow-2xl overflow-hidden"
+          style={{ 
+            backgroundColor: '#FFFFFF',
+            borderColor: '#E5E5E5',
+            zIndex: 101,
+            maxHeight: '400px',
+            overflowY: 'auto'
+          }}
         >
           {suggestions.map((s, idx) => {
-            // ✅ INDIVIDUAL ITEM SAFETY: Skip if item is null/undefined
             if (!s || typeof s !== 'object') return null;
             
-            const safeScore = typeof s.petroloadScore === 'number' ? s.petroloadScore : 0;
+            const safeScore = typeof s.petroloadScore === 'number' ? s.petroloadScore : null;
             const impactColor = safeScore >= 0.8 ? '#EF4444' : 
-                               safeScore >= 0.5 ? '#F59E0B' : '#10B981';
+                               safeScore >= 0.5 ? '#F59E0B' : 
+                               safeScore !== null ? '#10B981' : null;
             
             return (
               <button
@@ -208,7 +207,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                   handleSelectSuggestion(s);
                 }}
                 onMouseEnter={() => setActiveIdx(idx)}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100 hover:bg-gray-50"
+                className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                 style={{
                   fontFamily: "'Inter', sans-serif",
                   backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
@@ -222,7 +221,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                       {s.label || 'Unknown Material'}
                     </span>
                     
-                    {typeof s.petroloadScore === 'number' && (
+                    {impactColor && (
                       <span 
                         className="w-2 h-2 rounded-full flex-shrink-0"
                         title={`Environmental Impact: ${Math.round(safeScore * 100)}%`}
@@ -231,9 +230,9 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                     )}
                   </div>
                   
-                  {s.materialName && s.materialName !== s.label && (
+                  {s.materialFamily && (
                     <span className="text-xs text-gray-500 mt-1 block">
-                      {s.materialFamily || 'Material'}
+                      {s.materialFamily}
                     </span>
                   )}
                 </div>
