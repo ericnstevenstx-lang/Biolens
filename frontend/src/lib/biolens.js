@@ -352,6 +352,73 @@ export function saveScanToHistory(query, result) {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch {}
   return updated;
 }
+{/* In your SearchBar.jsx, enhance the suggestion display */}
+{suggestions.map((s, idx) => (
+  <button
+    key={`${s.label}-${idx}`}
+    data-testid={`suggestion-${idx}`}
+    onMouseDown={(e) => {
+      e.preventDefault();
+      handleSelectSuggestion(s);
+    }}
+    onMouseEnter={() => setActiveIdx(idx)}
+    className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100"
+    style={{
+      fontFamily: "'Inter', sans-serif",
+      backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
+    }}
+  >
+    <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#86868B' }} />
+    
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="text-sm" style={{ color: '#1D1D1F' }}>
+          {s.label}
+        </span>
+        {/* ✨ NEW: Impact indicator dot */}
+        {s.petroloadScore != null && (
+          <span 
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ 
+              backgroundColor: s.petroloadScore >= 0.8 ? '#EF4444' : 
+                              s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981' 
+            }}
+          />
+        )}
+      </div>
+      {s.materialName && s.materialName !== s.label && (
+        <span className="text-[0.6rem] ml-1" style={{ color: '#86868B' }}>
+          ({s.materialName})
+        </span>
+      )}
+    </div>
+
+    {/* ✨ NEW: Alternatives count badge */}
+    {s.alternativesCount > 0 && (
+      <span
+        className="text-[0.65rem] px-2 py-0.5 rounded-full flex-shrink-0"
+        style={{
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          color: '#10B981',
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        {s.alternativesCount} alt
+      </span>
+    )}
+
+    <span
+      className="text-[0.65rem] px-2 py-0.5 rounded-full flex-shrink-0"
+      style={{
+        fontFamily: "'Inter', sans-serif",
+        backgroundColor: s.type === 'material' ? 'rgba(180, 83, 9, 0.08)' : 'rgba(29, 29, 31, 0.05)',
+        color: s.type === 'material' ? '#B45309' : '#86868B',
+      }}
+    >
+      {s.type}
+    </span>
+  </button>
+))}
 
 export function clearScanHistory() {
   try { localStorage.removeItem(HISTORY_KEY); } catch {}
