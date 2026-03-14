@@ -9,20 +9,27 @@ export default function PetroloadMeter({ score, size = "large" }) {
   const svgW = isLarge ? 220 : 140;
   const svgH = isLarge ? 130 : 85;
   const cx = svgW / 2;
-  const cy = isLarge ? 110 : 72;
+  const cy = isLarge ? 110 : 72; // Baseline of the semicircle
   const r = isLarge ? 90 : 58;
   const strokeW = isLarge ? 12 : 8;
 
-  // PRECISE TRIGONOMETRIC CALCULATION
-  // Map 0-100 score to π (left) to 0 (right) radians
-  const angle = Math.PI - (Math.PI * (clampedScore / 100));
+  // CORRECTED TRIGONOMETRIC CALCULATION
+  // Map 0-100% score to π (left) to 0 (right) radians
+  const scoreRatio = clampedScore / 100;
+  const angle = Math.PI * (1 - scoreRatio);
   
   // Calculate exact marker coordinates
+  // CRITICAL FIX: Subtract Y component for SVG coordinate system
   const markerX = cx + r * Math.cos(angle);
-  const markerY = cy + r * Math.sin(angle);
+  const markerY = cy - r * Math.sin(angle); // ← KEY FIX: Minus instead of plus
 
   // Background semicircle path
-  const bgPath = `M ${cx + r * Math.cos(Math.PI)} ${cy + r * Math.sin(Math.PI)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(0)} ${cy + r * Math.sin(0)}`;
+  const x1 = cx - r; // Left endpoint
+  const y1 = cy;     // Baseline height
+  const x2 = cx + r; // Right endpoint
+  const y2 = cy;     // Baseline height
+  
+  const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`;
 
   return (
     <div data-testid="petroload-meter" className="flex flex-col items-center">
@@ -41,18 +48,18 @@ export default function PetroloadMeter({ score, size = "large" }) {
           strokeLinecap="round"
         />
         
-        {/* Precise marker dot at calculated position */}
+        {/* Precisely positioned marker dot */}
         {clampedScore > 0 && (
           <circle 
             cx={markerX} 
             cy={markerY} 
-            r={strokeW / 1.5} 
+            r={isLarge ? 8 : 6} 
             fill={level.color}
             stroke="white"
-            strokeWidth={2}
+            strokeWidth={3}
             style={{ 
-              transition: "all 0.5s ease-out",
-              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
+              transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+              filter: "drop-shadow(0 2px 3px rgba(0,0,0,0.2))"
             }}
           />
         )}
@@ -60,28 +67,29 @@ export default function PetroloadMeter({ score, size = "large" }) {
         {/* Score text */}
         <text
           x={cx}
-          y={cy - (isLarge ? 20 : 12)}
+          y={cy - (isLarge ? 25 : 15)}
           textAnchor="middle"
           style={{
             fontFamily: "'Manrope', sans-serif",
-            fontSize: isLarge ? "2.2rem" : "1.4rem",
-            fontWeight: 700,
+            fontSize: isLarge ? "2.5rem" : "1.6rem",
+            fontWeight: 800,
             fill: "#1D1D1F",
           }}
         >
           {score != null ? score : "—"}
         </text>
+        
         <text
           x={cx}
-          y={cy - (isLarge ? 2 : 0)}
+          y={cy - (isLarge ? 5 : 2)}
           textAnchor="middle"
           style={{
             fontFamily: "'Inter', sans-serif",
-            fontSize: isLarge ? "0.65rem" : "0.5rem",
-            fontWeight: 500,
+            fontSize: isLarge ? "0.75rem" : "0.55rem",
+            fontWeight: 600,
             fill: "#86868B",
             textTransform: "uppercase",
-            letterSpacing: "0.08em",
+            letterSpacing: "0.05em",
           }}
         >
           / 100
@@ -89,7 +97,7 @@ export default function PetroloadMeter({ score, size = "large" }) {
       </svg>
 
       {/* Label */}
-      <div className="text-center" style={{ marginTop: isLarge ? '-8px' : '-4px' }}>
+      <div className="text-center" style={{ marginTop: isLarge ? '8px' : '4px' }}>
         <span
           data-testid="petroload-label"
           className={`inline-block px-3 py-1 rounded-full text-xs font-semibold`}
@@ -98,10 +106,16 @@ export default function PetroloadMeter({ score, size = "large" }) {
             backgroundColor: `${level.color}15`,
             color: level.color,
             letterSpacing: "0.03em",
+            border: `1px solid ${level.color}30`
           }}
         >
           {level.label} Petroload
         </span>
+        <p className="text-xs text-gray-500 mt-1 font-medium">
+          {level.label === 'High' ? 'High Petrochemical Dependence' : 
+           level.label === 'Medium' ? 'Moderate Petrochemical Dependence' : 
+           'Low Petrochemical Dependence'}
+        </p>
       </div>
     </div>
   );
