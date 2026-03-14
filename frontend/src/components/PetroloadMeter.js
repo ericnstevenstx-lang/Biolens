@@ -1,9 +1,5 @@
 import { getPetroloadLevel } from "@/lib/biolens";
 
-/**
- * Petroload arc gauge visualization.
- * Displays a half-circle arc meter with score marker and label.
- */
 export default function PetroloadMeter({ score, size = "large" }) {
   const level = getPetroloadLevel(score);
   const clampedScore = Math.max(0, Math.min(100, score ?? 0));
@@ -17,38 +13,16 @@ export default function PetroloadMeter({ score, size = "large" }) {
   const r = isLarge ? 90 : 58;
   const strokeW = isLarge ? 12 : 8;
 
-  // Background arc: full semicircle from left to right
-  const startAngle = Math.PI;   // 180° (leftmost)
-  const endAngle = 0;           // 0° (rightmost)
+  // PRECISE TRIGONOMETRIC CALCULATION
+  // Map 0-100 score to π (left) to 0 (right) radians
+  const angle = Math.PI - (Math.PI * (clampedScore / 100));
   
-  // Background arc coordinates
-  const x1 = cx + r * Math.cos(startAngle);
-  const y1 = cy + r * Math.sin(startAngle);
-  const x2 = cx + r * Math.cos(endAngle);
-  const y2 = cy + r * Math.sin(endAngle);
-  
-  // Background path (full semicircle)
-  const bgPath = `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`;
+  // Calculate exact marker coordinates
+  const markerX = cx + r * Math.cos(angle);
+  const markerY = cy + r * Math.sin(angle);
 
-  // MARKER CALCULATION: Position marker at exact score location
-  const scoreT = clampedScore / 100; // 0-1 range
-  const scoreAngle = startAngle + (endAngle - startAngle) * scoreT;
-  
-  // Marker width in radians (creates a small colored segment)
-  const markerWidthDegrees = isLarge ? 8 : 6; // degrees
-  const markerWidth = (markerWidthDegrees * Math.PI) / 180; // convert to radians
-  
-  const markerStartAngle = scoreAngle - markerWidth / 2;
-  const markerEndAngle = scoreAngle + markerWidth / 2;
-  
-  // Marker arc coordinates
-  const xMarkerStart = cx + r * Math.cos(markerStartAngle);
-  const yMarkerStart = cy + r * Math.sin(markerStartAngle);
-  const xMarkerEnd = cx + r * Math.cos(markerEndAngle);
-  const yMarkerEnd = cy + r * Math.sin(markerEndAngle);
-  
-  // Marker path (small arc segment at score position)
-  const markerPath = `M ${xMarkerStart} ${yMarkerStart} A ${r} ${r} 0 0 1 ${xMarkerEnd} ${yMarkerEnd}`;
+  // Background semicircle path
+  const bgPath = `M ${cx + r * Math.cos(Math.PI)} ${cy + r * Math.sin(Math.PI)} A ${r} ${r} 0 0 1 ${cx + r * Math.cos(0)} ${cy + r * Math.sin(0)}`;
 
   return (
     <div data-testid="petroload-meter" className="flex flex-col items-center">
@@ -67,20 +41,22 @@ export default function PetroloadMeter({ score, size = "large" }) {
           strokeLinecap="round"
         />
         
-        {/* Score marker (colored segment at exact score position) */}
+        {/* Precise marker dot at calculated position */}
         {clampedScore > 0 && (
-          <path
-            d={markerPath}
-            fill="none"
-            stroke={level.color}
-            strokeWidth={strokeW + 2} // Slightly thicker for visibility
-            strokeLinecap="round"
-            style={{
-              transition: "stroke 0.3s ease",
+          <circle 
+            cx={markerX} 
+            cy={markerY} 
+            r={strokeW / 1.5} 
+            fill={level.color}
+            stroke="white"
+            strokeWidth={2}
+            style={{ 
+              transition: "all 0.5s ease-out",
+              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
             }}
           />
         )}
-        
+
         {/* Score text */}
         <text
           x={cx}
