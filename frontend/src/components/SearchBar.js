@@ -6,7 +6,7 @@ import { fetchAutocomplete } from "../lib/biolens";
 const PLACEHOLDERS = [
   "poly hoodie",
   "bamboo sheets",
-  "pet bottle", 
+  "pet bottle",
   "vegan leather bag",
   "plastic cutting board",
   "nylon rope",
@@ -18,6 +18,8 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const [query, setQuery] = useState(initialQuery);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const [isFocused, setIsFocused] = useState(false);
+  
+  // ✅ SAFE STATE INITIALIZATION
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
@@ -53,7 +55,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   }, []);
 
   const fetchSuggestions = useCallback(async (text) => {
-    if (text.length < 2) {
+    if (!text || text.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
@@ -61,11 +63,14 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
 
     try {
       const results = await fetchAutocomplete(text, 6);
-      setSuggestions(results);
-      setShowSuggestions(results.length > 0);
+      // ✅ CRITICAL SAFETY CHECK: Ensure results is always an array
+      const validResults = Array.isArray(results) ? results : [];
+      setSuggestions(validResults);
+      setShowSuggestions(validResults.length > 0);
       setActiveIdx(-1);
     } catch (error) {
       console.error("Autocomplete error:", error);
+      // ✅ SAFE FALLBACK: Always set to empty array on error
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -90,14 +95,17 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   };
 
   const handleSelectSuggestion = (suggestion) => {
-    const term = suggestion.label || suggestion;
+    const term = suggestion?.label || suggestion || "";
     setQuery(term);
     setShowSuggestions(false);
-    navigate(`/results?q=${encodeURIComponent(term)}`);
+    if (term) {
+      navigate(`/results?q=${encodeURIComponent(term)}`);
+    }
   };
 
   const handleKeyDown = (e) => {
-    if (!showSuggestions || suggestions.length === 0) return;
+    // ✅ COMPREHENSIVE SAFETY CHECK: Verify suggestions exists and is array
+    if (!showSuggestions || !Array.isArray(suggestions) || suggestions.length === 0) return;
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -105,7 +113,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIdx((prev) => (prev <= 0 ? suggestions.length - 1 : prev - 1));
-    } else if (e.key === "Enter" && activeIdx >= 0) {
+    } else if (e.key === "Enter" && activeIdx >= 0 && suggestions[activeIdx]) {
       e.preventDefault();
       handleSelectSuggestion(suggestions[activeIdx]);
     } else if (e.key === "Escape") {
@@ -141,7 +149,10 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
             onChange={handleChange}
             onFocus={() => {
               setIsFocused(true);
-              if (suggestions.length > 0) setShowSuggestions(true);
+              // ✅ SAFE ACCESS: Check array before accessing length
+              if (Array.isArray(suggestions) && suggestions.length > 0) {
+                setShowSuggestions(true);
+              }
             }}
             onBlur={() => {
               setIsFocused(false);
@@ -173,19 +184,24 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {showSuggestions && suggestions.length > 0 && (
+      {/* ✅ TRIPLE SAFETY CHECK: Verify showSuggestions, array type, and length */}
+      {showSuggestions && Array.isArray(suggestions) && suggestions.length > 0 && (
         <div
           data-testid="autocomplete-dropdown"
           className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border shadow-2xl overflow-hidden z-50"
           style={{ borderColor: '#E5E5E5' }}
         >
           {suggestions.map((s, idx) => {
-            const impactColor = s.petroloadScore >= 0.8 ? '#EF4444' : 
-                               s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981';
+            // ✅ INDIVIDUAL ITEM SAFETY: Skip if item is null/undefined
+            if (!s || typeof s !== 'object') return null;
+            
+            const safeScore = typeof s.petroloadScore === 'number' ? s.petroloadScore : 0;
+            const impactColor = safeScore >= 0.8 ? '#EF4444' : 
+                               safeScore >= 0.5 ? '#F59E0B' : '#10B981';
             
             return (
               <button
-                key={`${s.label}-${idx}`}
+                key={`${s.label || 'item'}-${idx}`}
                 data-testid={`suggestion-${idx}`}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -203,13 +219,13 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
-                      {s.label}
+                      {s.label || 'Unknown Material'}
                     </span>
                     
-                    {s.petroloadScore != null && (
+                    {typeof s.petroloadScore === 'number' && (
                       <span 
                         className="w-2 h-2 rounded-full flex-shrink-0"
-                        title={`Environmental Impact: ${Math.round(s.petroloadScore * 100)}%`}
+                        title={`Environmental Impact: ${Math.round(safeScore * 100)}%`}
                         style={{ backgroundColor: impactColor }}
                       />
                     )}
@@ -222,7 +238,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                   )}
                 </div>
 
-                {s.alternativesCount > 0 && (
+                {typeof s.alternativesCount === 'number' && s.alternativesCount > 0 && (
                   <span
                     className="text-xs px-2 py-1 rounded-full font-medium flex-shrink-0"
                     style={{
@@ -241,7 +257,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                     color: s.type === 'material' ? '#B45309' : '#86868B',
                   }}
                 >
-                  {s.type}
+                  {s.type || 'item'}
                 </span>
               </button>
             );
