@@ -5,7 +5,7 @@ import { fetchAutocomplete } from "@/lib/biolens";
 
 const PLACEHOLDERS = [
   "poly hoodie",
-  "bamboo sheets",
+  "bamboo sheets", 
   "pet bottle",
   "vegan leather bag",
   "plastic cutting board",
@@ -21,11 +21,10 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const [dropdownPos, setDropdownPos] = useState(null);
+  
   const navigate = useNavigate();
   const inputRef = useRef(null);
   const wrapperRef = useRef(null);
-  const formRef = useRef(null);
   const debounceRef = useRef(null);
 
   // Placeholder cycling
@@ -44,23 +43,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     }
   }, [autoFocus]);
 
-  // Recalculate dropdown position on scroll
-  useEffect(() => {
-    if (!showSuggestions) return;
-    const updatePos = () => {
-      if (formRef.current) {
-        const rect = formRef.current.getBoundingClientRect();
-        setDropdownPos({ top: rect.bottom + 8, left: rect.left, width: rect.width });
-      }
-    };
-    window.addEventListener('scroll', updatePos, { passive: true });
-    window.addEventListener('resize', updatePos, { passive: true });
-    return () => {
-      window.removeEventListener('scroll', updatePos);
-      window.removeEventListener('resize', updatePos);
-    };
-  }, [showSuggestions]);
-
   // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -73,7 +55,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Autocomplete fetcher — uses Supabase RPC
+  // Enhanced autocomplete with your new fuzzy search
   const fetchSuggestions = useCallback(async (text) => {
     if (text.length < 2) {
       setSuggestions([]);
@@ -84,21 +66,10 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     try {
       const results = await fetchAutocomplete(text, 6);
       setSuggestions(results);
-      if (results.length > 0) {
-        if (formRef.current) {
-          const rect = formRef.current.getBoundingClientRect();
-          setDropdownPos({
-            top: rect.bottom + 8,
-            left: rect.left,
-            width: rect.width,
-          });
-        }
-        setShowSuggestions(true);
-      } else {
-        setShowSuggestions(false);
-      }
+      setShowSuggestions(results.length > 0);
       setActiveIdx(-1);
-    } catch {
+    } catch (error) {
+      console.error("Autocomplete error:", error);
       setSuggestions([]);
       setShowSuggestions(false);
     }
@@ -151,9 +122,13 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const isLarge = size === "large";
 
   return (
-    <div ref={wrapperRef} className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`} style={{ zIndex: showSuggestions ? 60 : 'auto' }}>
+    {/* ✅ KEY FIX: Added 'relative' positioning for proper dropdown anchoring */}
+    <div 
+      ref={wrapperRef} 
+      className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`}
+      style={{ zIndex: showSuggestions ? 60 : 'auto' }}
+    >
       <form
-        ref={formRef}
         onSubmit={handleSubmit}
         data-testid="search-form"
         className="search-glow relative w-full transition-shadow duration-300"
@@ -176,7 +151,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
             }}
             onBlur={() => {
               setIsFocused(false);
-              // Delay hiding suggestions so onMouseDown on dropdown fires first
               setTimeout(() => setShowSuggestions(false), 150);
             }}
             onKeyDown={handleKeyDown}
@@ -205,19 +179,12 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {/* Autocomplete dropdown - fixed position to escape stacking context */}
-      {showSuggestions && suggestions.length > 0 && dropdownPos && (
+      {/* ✅ ENHANCED DROPDOWN: Simplified positioning with visual improvements */}
+      {showSuggestions && suggestions.length > 0 && (
         <div
           data-testid="autocomplete-dropdown"
-          className="bg-white rounded-xl border shadow-lg overflow-hidden"
-          style={{
-            position: 'fixed',
-            top: dropdownPos.top,
-            left: dropdownPos.left,
-            width: dropdownPos.width,
-            zIndex: 9999,
-            borderColor: '#E5E5E5',
-          }}
+          className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border shadow-2xl overflow-hidden z-50"
+          style={{ borderColor: '#E5E5E5' }}
         >
           {suggestions.map((s, idx) => (
             <button
@@ -228,31 +195,56 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                 handleSelectSuggestion(s);
               }}
               onMouseEnter={() => setActiveIdx(idx)}
-              className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100"
+              className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100 hover:bg-gray-50"
               style={{
                 fontFamily: "'Inter', sans-serif",
                 backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
               }}
             >
               <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#86868B' }} />
-              <span
-                className="text-sm"
-                style={{ color: '#1D1D1F' }}
-              >
-                {s.label}
-              </span>
-              {s.materialName && s.materialName !== s.label && (
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
+                    {s.label}
+                  </span>
+                  
+                  {/* ✨ NEW: Environmental Impact Indicator */}
+                  {s.petroloadScore != null && (
+                    <span 
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      title={`Environmental Impact: ${Math.round(s.petroloadScore * 100)}%`}
+                      style={{ 
+                        backgroundColor: s.petroloadScore >= 0.8 ? '#EF4444' : 
+                                        s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981' 
+                      }}
+                    />
+                  )}
+                </div>
+                
+                {s.materialName && s.materialName !== s.label && (
+                  <span className="text-xs text-gray-500 mt-1">
+                    {s.materialFamily || 'Material'}
+                  </span>
+                )}
+              </div>
+
+              {/* ✨ NEW: Alternatives Count Badge */}
+              {s.alternativesCount > 0 && (
                 <span
-                  className="text-[0.6rem] ml-1"
-                  style={{ color: '#86868B' }}
+                  className="text-xs px-2 py-1 rounded-full font-medium"
+                  style={{
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    color: '#10B981',
+                  }}
                 >
-                  ({s.materialName})
+                  {s.alternativesCount} alternatives
                 </span>
               )}
+
               <span
-                className="text-[0.65rem] ml-auto px-2 py-0.5 rounded-full"
+                className="text-xs px-2 py-1 rounded-full"
                 style={{
-                  fontFamily: "'Inter', sans-serif",
                   backgroundColor: s.type === 'material' ? 'rgba(180, 83, 9, 0.08)' : 'rgba(29, 29, 31, 0.05)',
                   color: s.type === 'material' ? '#B45309' : '#86868B',
                 }}
