@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
-import { fetchAutocomplete } from "@/lib/biolens";
+import { fetchAutocomplete } from "../lib/biolens"; // Fixed: relative path instead of @/lib/biolens
 
 const PLACEHOLDERS = [
   "poly hoodie",
-  "bamboo sheets", 
+  "bamboo sheets",
   "pet bottle",
   "vegan leather bag",
   "plastic cutting board",
@@ -55,7 +55,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Enhanced autocomplete with your new fuzzy search
+  // Enhanced autocomplete with fuzzy search
   const fetchSuggestions = useCallback(async (text) => {
     if (text.length < 2) {
       setSuggestions([]);
@@ -122,12 +122,12 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const isLarge = size === "large";
 
   return (
-    {/* ✅ KEY FIX: Added 'relative' positioning for proper dropdown anchoring */}
     <div 
       ref={wrapperRef} 
       className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`}
       style={{ zIndex: showSuggestions ? 60 : 'auto' }}
     >
+      {/* Search form */}
       <form
         onSubmit={handleSubmit}
         data-testid="search-form"
@@ -179,7 +179,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {/* ✅ ENHANCED DROPDOWN: Simplified positioning with visual improvements */}
+      {/* Enhanced autocomplete dropdown with proper positioning */}
       {showSuggestions && suggestions.length > 0 && (
         <div
           data-testid="autocomplete-dropdown"
@@ -209,7 +209,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                     {s.label}
                   </span>
                   
-                  {/* ✨ NEW: Environmental Impact Indicator */}
+                  {/* Environmental impact indicator */}
                   {s.petroloadScore != null && (
                     <span 
                       className="w-2 h-2 rounded-full flex-shrink-0"
@@ -229,7 +229,7 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
                 )}
               </div>
 
-              {/* ✨ NEW: Alternatives Count Badge */}
+              {/* Alternatives count badge */}
               {s.alternativesCount > 0 && (
                 <span
                   className="text-xs px-2 py-1 rounded-full font-medium"
