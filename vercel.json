@@ -1,1 +1,13 @@
+{
+  "framework": "create-react-app",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --legacy-peer-deps",
+  "build": {
+    "env": {
+      "CI": "false",
+      "GENERATE_SOURCEMAP": "false",
+      "NODE_OPTIONS": "--max_old_space_size=4096"
+    }
+  }
+}
 
