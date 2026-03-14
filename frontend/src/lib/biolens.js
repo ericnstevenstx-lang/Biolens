@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 
-// ─── Utility helpers ───────────────────────────────────────────
+// ─── Utility helpers (Enhanced) ────────────────────────────────
 
 export function getConfidenceLabel(score) {
   if (score == null) return "Preliminary Match";
@@ -12,9 +12,11 @@ export function getConfidenceLabel(score) {
 
 export function getPetroloadLevel(score) {
   if (score == null) return { label: "Unknown", color: "#86868B" };
-  if (score <= 25) return { label: "Low", color: "#22C55E" };
-  if (score <= 50) return { label: "Moderate", color: "#EAB308" };
-  if (score <= 75) return { label: "High", color: "#F97316" };
+  // Handle both 0-1 and 0-100 scales for compatibility
+  const normalizedScore = score > 1 ? score / 100 : score;
+  if (normalizedScore <= 0.25) return { label: "Low", color: "#22C55E" };
+  if (normalizedScore <= 0.50) return { label: "Moderate", color: "#EAB308" };
+  if (normalizedScore <= 0.75) return { label: "High", color: "#F97316" };
   return { label: "Very High", color: "#EF4444" };
 }
 
@@ -57,7 +59,66 @@ function buildExplanation(row) {
 
 function pct(val) { return val != null ? Math.round(val * 100) : null; }
 
-// ─── Primary Scan ──────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// ✅ ENHANCED AUTOCOMPLETE (Powers Your SearchBar)
+// ═══════════════════════════════════════════════════════════════
+
+export async function fetchAutocomplete(query, limit = 6) {
+  if (!query || query.trim().length < 2) return [];
+
+  try {
+    // ✨ Try enhanced search first (fuzzy matching + alternatives)
+    const { data: enhancedData, error: enhancedError } = await supabase.rpc(
+      'search_materials_with_alternatives',
+      {
+        search_term: query.trim(),
+        limit_count: limit
+      }
+    );
+
+    if (!enhancedError && enhancedData && enhancedData.length > 0) {
+      // Transform to match your SearchBar's expected format
+      return enhancedData.map((material) => ({
+        label: material.material_name,
+        type: "material",
+        materialName: material.material_name,
+        materialId: material.id,
+        // ✨ NEW: Enhanced data for better UI
+        petroloadScore: material.petroload_score,
+        alternativesCount: material.alternatives_count || 0,
+        matchType: material.match_type,
+        materialFamily: material.material_family,
+      }));
+    }
+  } catch (enhancedErr) {
+    console.warn("Enhanced autocomplete unavailable, using fallback:", enhancedErr);
+  }
+
+  // Graceful fallback to your original autocomplete
+  try {
+    const { data, error } = await supabase.rpc("search_biolens_autocomplete", {
+      user_query: query,
+      p_limit: limit,
+    });
+    
+    if (error) {
+      console.error("Autocomplete error:", error);
+      return [];
+    }
+    
+    return (data || []).map((s) => ({
+      label: s.suggestion_label,
+      type: s.suggestion_type,
+      materialName: s.material_name,
+      materialId: s.material_id,
+    }));
+  } catch (fallbackErr) {
+    console.error("Fallback autocomplete failed:", fallbackErr);
+    return [];
+  }
+}
+
+// ─── Primary Scan (Maintained for Compatibility) ───────────────
 
 export async function searchBioLens(query) {
   const { data, error } = await supabase.rpc("search_biolens_scan_enriched", { user_query: query });
@@ -110,7 +171,122 @@ export async function searchBioLens(query) {
   };
 }
 
-// ─── Alternative Products (FiberFoundry-first) ─────────────────
+// ═══════════════════════════════════════════════════════════════
+// ✅ NEW ENHANCED FUNCTIONS (Available for Future Use)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 🔍 Enhanced material search for dedicated search pages
+ */
+export async function searchMaterialsEnhanced(query, limit = 12) {
+  if (!query || query.trim() === '') {
+    return getFeaturedMaterials(limit);
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('search_materials_with_alternatives', {
+      search_term: query.trim(),
+      limit_count: limit
+    });
+
+    if (error) {
+      console.error('Enhanced search error:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Search failed:', error);
+    return [];
+  }
+}
+
+/**
+ * 📄 Get complete material details with alternatives
+ */
+export async function getMaterialWithAlternatives(materialId) {
+  if (!materialId) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('get_material_with_alternatives', {
+      material_uuid: materialId
+    });
+
+    if (error) {
+      console.error('Material details error:', error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Material details failed:', error);
+    return null;
+  }
+}
+
+/**
+ * ⭐ Get featured high-impact materials
+ */
+export async function getFeaturedMaterials(limit = 6) {
+  try {
+    const { data, error } = await supabase
+      .from('materials')
+      .select(`
+        id,
+        material_name,
+        material_family,
+        petroload_score,
+        biodegradability_score,
+        toxicity_score,
+        consumer_facing_summary,
+        risk_level
+      `)
+      .gt('petroload_score', 0.8)
+      .not('consumer_facing_summary', 'is', null)
+      .order('petroload_score', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    
+    return (data || []).map(material => ({
+      ...material,
+      alternatives_count: 0,
+      match_type: 'featured'
+    }));
+  } catch (error) {
+    console.error('Featured materials error:', error);
+    return [];
+  }
+}
+
+/**
+ * 🎨 Get impact level styling from petroload score
+ */
+export function getImpactLevel(score) {
+  if (score == null) {
+    return { text: 'Unknown', level: 'unknown', class: 'bg-gray-500 text-white', color: '#86868B' };
+  }
+  
+  if (score >= 0.8) {
+    return { text: 'High Impact', level: 'high', class: 'bg-red-500 text-white', color: '#EF4444' };
+  }
+  
+  if (score >= 0.5) {
+    return { text: 'Medium Impact', level: 'medium', class: 'bg-yellow-500 text-white', color: '#F59E0B' };
+  }
+  
+  return { text: 'Low Impact', level: 'low', class: 'bg-green-500 text-white', color: '#10B981' };
+}
+
+/**
+ * 📊 Format score as percentage
+ */
+export function formatScore(score) {
+  if (score === null || score === undefined) return 'N/A';
+  return `${Math.round(score * 100)}%`;
+}
+
+// ─── Alternative Products (Maintained) ─────────────────────────
 
 export async function fetchAlternativeProducts(query, limit = 6) {
   const { data, error } = await supabase.rpc("get_best_alternative_products_for_query", {
@@ -150,21 +326,6 @@ export async function fetchGlobalImpact() {
   const { data, error } = await supabase.rpc("get_global_impact_counters");
   if (error) { console.error("Impact counters error:", error); return null; }
   return data && data.length > 0 ? data[0] : null;
-}
-
-// ─── Autocomplete (Supabase RPC) ───────────────────────────────
-
-export async function fetchAutocomplete(query, limit = 6) {
-  const { data, error } = await supabase.rpc("search_biolens_autocomplete", {
-    user_query: query, p_limit: limit,
-  });
-  if (error) { console.error("Autocomplete error:", error); return []; }
-  return (data || []).map((s) => ({
-    label: s.suggestion_label,
-    type: s.suggestion_type,
-    materialName: s.material_name,
-    materialId: s.material_id,
-  }));
 }
 
 // ─── Scan History (localStorage) ───────────────────────────────
