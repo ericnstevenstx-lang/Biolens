@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, ArrowRight } from "lucide-react";
-import { fetchAutocomplete } from "../lib/biolens"; // Fixed: relative path instead of @/lib/biolens
+import { fetchAutocomplete } from "../lib/biolens";
 
 const PLACEHOLDERS = [
   "poly hoodie",
   "bamboo sheets",
-  "pet bottle",
+  "pet bottle", 
   "vegan leather bag",
   "plastic cutting board",
   "nylon rope",
@@ -27,7 +27,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
   const wrapperRef = useRef(null);
   const debounceRef = useRef(null);
 
-  // Placeholder cycling
   useEffect(() => {
     if (isFocused) return;
     const interval = setInterval(() => {
@@ -36,14 +35,12 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     return () => clearInterval(interval);
   }, [isFocused]);
 
-  // Autofocus
   useEffect(() => {
     if (autoFocus && inputRef.current) {
       inputRef.current.focus();
     }
   }, [autoFocus]);
 
-  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
@@ -55,7 +52,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Enhanced autocomplete with fuzzy search
   const fetchSuggestions = useCallback(async (text) => {
     if (text.length < 2) {
       setSuggestions([]);
@@ -75,7 +71,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
     }
   }, []);
 
-  // Debounced input handler
   const handleChange = (e) => {
     const val = e.target.value;
     setQuery(val);
@@ -127,7 +122,6 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
       className={`relative w-full ${isLarge ? 'max-w-2xl' : 'max-w-xl'}`}
       style={{ zIndex: showSuggestions ? 60 : 'auto' }}
     >
-      {/* Search form */}
       <form
         onSubmit={handleSubmit}
         data-testid="search-form"
@@ -179,80 +173,79 @@ export default function SearchBar({ size = "large", initialQuery = "", autoFocus
         </div>
       </form>
 
-      {/* Enhanced autocomplete dropdown with proper positioning */}
       {showSuggestions && suggestions.length > 0 && (
         <div
           data-testid="autocomplete-dropdown"
           className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border shadow-2xl overflow-hidden z-50"
           style={{ borderColor: '#E5E5E5' }}
         >
-          {suggestions.map((s, idx) => (
-            <button
-              key={`${s.label}-${idx}`}
-              data-testid={`suggestion-${idx}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleSelectSuggestion(s);
-              }}
-              onMouseEnter={() => setActiveIdx(idx)}
-              className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100 hover:bg-gray-50"
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
-              }}
-            >
-              <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#86868B' }} />
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
-                    {s.label}
-                  </span>
-                  
-                  {/* Environmental impact indicator */}
-                  {s.petroloadScore != null && (
-                    <span 
-                      className="w-2 h-2 rounded-full flex-shrink-0"
-                      title={`Environmental Impact: ${Math.round(s.petroloadScore * 100)}%`}
-                      style={{ 
-                        backgroundColor: s.petroloadScore >= 0.8 ? '#EF4444' : 
-                                        s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981' 
-                      }}
-                    />
-                  )}
-                </div>
-                
-                {s.materialName && s.materialName !== s.label && (
-                  <span className="text-xs text-gray-500 mt-1">
-                    {s.materialFamily || 'Material'}
-                  </span>
-                )}
-              </div>
-
-              {/* Alternatives count badge */}
-              {s.alternativesCount > 0 && (
-                <span
-                  className="text-xs px-2 py-1 rounded-full font-medium"
-                  style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    color: '#10B981',
-                  }}
-                >
-                  {s.alternativesCount} alternatives
-                </span>
-              )}
-
-              <span
-                className="text-xs px-2 py-1 rounded-full"
+          {suggestions.map((s, idx) => {
+            const impactColor = s.petroloadScore >= 0.8 ? '#EF4444' : 
+                               s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981';
+            
+            return (
+              <button
+                key={`${s.label}-${idx}`}
+                data-testid={`suggestion-${idx}`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelectSuggestion(s);
+                }}
+                onMouseEnter={() => setActiveIdx(idx)}
+                className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100 hover:bg-gray-50"
                 style={{
-                  backgroundColor: s.type === 'material' ? 'rgba(180, 83, 9, 0.08)' : 'rgba(29, 29, 31, 0.05)',
-                  color: s.type === 'material' ? '#B45309' : '#86868B',
+                  fontFamily: "'Inter', sans-serif",
+                  backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
                 }}
               >
-                {s.type}
-              </span>
-            </button>
-          ))}
+                <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#86868B' }} />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium" style={{ color: '#1D1D1F' }}>
+                      {s.label}
+                    </span>
+                    
+                    {s.petroloadScore != null && (
+                      <span 
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        title={`Environmental Impact: ${Math.round(s.petroloadScore * 100)}%`}
+                        style={{ backgroundColor: impactColor }}
+                      />
+                    )}
+                  </div>
+                  
+                  {s.materialName && s.materialName !== s.label && (
+                    <span className="text-xs text-gray-500 mt-1 block">
+                      {s.materialFamily || 'Material'}
+                    </span>
+                  )}
+                </div>
+
+                {s.alternativesCount > 0 && (
+                  <span
+                    className="text-xs px-2 py-1 rounded-full font-medium flex-shrink-0"
+                    style={{
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                      color: '#10B981',
+                    }}
+                  >
+                    {s.alternativesCount} alt
+                  </span>
+                )}
+
+                <span
+                  className="text-xs px-2 py-1 rounded-full flex-shrink-0"
+                  style={{
+                    backgroundColor: s.type === 'material' ? 'rgba(180, 83, 9, 0.08)' : 'rgba(29, 29, 31, 0.05)',
+                    color: s.type === 'material' ? '#B45309' : '#86868B',
+                  }}
+                >
+                  {s.type}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
