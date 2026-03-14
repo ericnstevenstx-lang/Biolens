@@ -12,7 +12,6 @@ export function getConfidenceLabel(score) {
 
 export function getPetroloadLevel(score) {
   if (score == null) return { label: "Unknown", color: "#86868B" };
-  // Handle both 0-1 and 0-100 scales for compatibility
   const normalizedScore = score > 1 ? score / 100 : score;
   if (normalizedScore <= 0.25) return { label: "Low", color: "#22C55E" };
   if (normalizedScore <= 0.50) return { label: "Moderate", color: "#EAB308" };
@@ -57,17 +56,21 @@ function buildExplanation(row) {
   return map[cls] || `${name} is classified as ${cls}.`;
 }
 
-function pct(val) { return val != null ? Math.round(val * 100) : null; }
+function pct(val) { 
+  return val != null ? Math.round(val * 100) : null; 
+}
 
 // ═══════════════════════════════════════════════════════════════
 // ✅ ENHANCED AUTOCOMPLETE (Powers Your SearchBar)
 // ═══════════════════════════════════════════════════════════════
 
 export async function fetchAutocomplete(query, limit = 6) {
-  if (!query || query.trim().length < 2) return [];
+  if (!query || query.trim().length < 2) {
+    return []; // Always return array for consistency
+  }
 
   try {
-    // ✨ Try enhanced search first (fuzzy matching + alternatives)
+    // Try enhanced search first (fuzzy matching + alternatives)
     const { data: enhancedData, error: enhancedError } = await supabase.rpc(
       'search_materials_with_alternatives',
       {
@@ -76,25 +79,24 @@ export async function fetchAutocomplete(query, limit = 6) {
       }
     );
 
-    if (!enhancedError && enhancedData && enhancedData.length > 0) {
-      // Transform to match your SearchBar's expected format
+    if (!enhancedError && enhancedData && Array.isArray(enhancedData) && enhancedData.length > 0) {
+      // Transform to match SearchBar's expected format
       return enhancedData.map((material) => ({
-        label: material.material_name,
+        label: material.material_name || "",
         type: "material",
-        materialName: material.material_name,
-        materialId: material.id,
-        // ✨ NEW: Enhanced data for better UI
-        petroloadScore: material.petroload_score,
+        materialName: material.material_name || "",
+        materialId: material.id || null,
+        petroloadScore: material.petroload_score || null,
         alternativesCount: material.alternatives_count || 0,
-        matchType: material.match_type,
-        materialFamily: material.material_family,
+        matchType: material.match_type || "fuzzy",
+        materialFamily: material.material_family || null,
       }));
     }
   } catch (enhancedErr) {
     console.warn("Enhanced autocomplete unavailable, using fallback:", enhancedErr);
   }
 
-  // Graceful fallback to your original autocomplete
+  // Graceful fallback to original autocomplete
   try {
     const { data, error } = await supabase.rpc("search_biolens_autocomplete", {
       user_query: query,
@@ -106,11 +108,16 @@ export async function fetchAutocomplete(query, limit = 6) {
       return [];
     }
     
+    // Ensure consistent return format
     return (data || []).map((s) => ({
-      label: s.suggestion_label,
-      type: s.suggestion_type,
-      materialName: s.material_name,
-      materialId: s.material_id,
+      label: s.suggestion_label || "",
+      type: s.suggestion_type || "material",
+      materialName: s.material_name || "",
+      materialId: s.material_id || null,
+      petroloadScore: null,
+      alternativesCount: 0,
+      matchType: "basic",
+      materialFamily: null,
     }));
   } catch (fallbackErr) {
     console.error("Fallback autocomplete failed:", fallbackErr);
@@ -159,7 +166,6 @@ export async function searchBioLens(query) {
     confidenceScore: p.confidence_score,
     explanation: buildExplanation(p),
     alternatives: alts,
-    // Risk signal scores (0-100)
     pesticideRisk: pct(p.pesticide_risk_score),
     herbicideRisk: pct(p.herbicide_risk_score),
     syntheticFertilizerRisk: pct(p.synthetic_fertilizer_risk_score),
@@ -175,9 +181,6 @@ export async function searchBioLens(query) {
 // ✅ NEW ENHANCED FUNCTIONS (Available for Future Use)
 // ═══════════════════════════════════════════════════════════════
 
-/**
- * 🔍 Enhanced material search for dedicated search pages
- */
 export async function searchMaterialsEnhanced(query, limit = 12) {
   if (!query || query.trim() === '') {
     return getFeaturedMaterials(limit);
@@ -201,9 +204,6 @@ export async function searchMaterialsEnhanced(query, limit = 12) {
   }
 }
 
-/**
- * 📄 Get complete material details with alternatives
- */
 export async function getMaterialWithAlternatives(materialId) {
   if (!materialId) return null;
 
@@ -224,9 +224,6 @@ export async function getMaterialWithAlternatives(materialId) {
   }
 }
 
-/**
- * ⭐ Get featured high-impact materials
- */
 export async function getFeaturedMaterials(limit = 6) {
   try {
     const { data, error } = await supabase
@@ -259,9 +256,6 @@ export async function getFeaturedMaterials(limit = 6) {
   }
 }
 
-/**
- * 🎨 Get impact level styling from petroload score
- */
 export function getImpactLevel(score) {
   if (score == null) {
     return { text: 'Unknown', level: 'unknown', class: 'bg-gray-500 text-white', color: '#86868B' };
@@ -278,9 +272,6 @@ export function getImpactLevel(score) {
   return { text: 'Low Impact', level: 'low', class: 'bg-green-500 text-white', color: '#10B981' };
 }
 
-/**
- * 📊 Format score as percentage
- */
 export function formatScore(score) {
   if (score === null || score === undefined) return 'N/A';
   return `${Math.round(score * 100)}%`;
@@ -290,9 +281,15 @@ export function formatScore(score) {
 
 export async function fetchAlternativeProducts(query, limit = 6) {
   const { data, error } = await supabase.rpc("get_best_alternative_products_for_query", {
-    user_query: query, p_limit: limit,
+    user_query: query, 
+    p_limit: limit,
   });
-  if (error) { console.error("Alt products error:", error); return []; }
+  
+  if (error) { 
+    console.error("Alt products error:", error); 
+    return []; 
+  }
+  
   if (!data) return [];
 
   return data.map((p) => ({
@@ -315,8 +312,15 @@ export async function fetchAlternativeProducts(query, limit = 6) {
 // ─── Product Purchase Sources ──────────────────────────────────
 
 export async function fetchProductSources(productId) {
-  const { data, error } = await supabase.rpc("get_product_purchase_sources", { p_product_id: productId });
-  if (error) { console.error("Sources error:", error); return []; }
+  const { data, error } = await supabase.rpc("get_product_purchase_sources", { 
+    p_product_id: productId 
+  });
+  
+  if (error) { 
+    console.error("Sources error:", error); 
+    return []; 
+  }
+  
   return data || [];
 }
 
@@ -324,7 +328,12 @@ export async function fetchProductSources(productId) {
 
 export async function fetchGlobalImpact() {
   const { data, error } = await supabase.rpc("get_global_impact_counters");
-  if (error) { console.error("Impact counters error:", error); return null; }
+  
+  if (error) { 
+    console.error("Impact counters error:", error); 
+    return null; 
+  }
+  
   return data && data.length > 0 ? data[0] : null;
 }
 
@@ -334,92 +343,41 @@ const HISTORY_KEY = "biolens_scan_history";
 const MAX_HISTORY = 20;
 
 export function getScanHistory() {
-  try { const r = localStorage.getItem(HISTORY_KEY); return r ? JSON.parse(r) : []; }
-  catch { return []; }
+  try { 
+    const r = localStorage.getItem(HISTORY_KEY); 
+    return r ? JSON.parse(r) : []; 
+  } catch { 
+    return []; 
+  }
 }
 
 export function saveScanToHistory(query, result) {
   if (!result) return;
+  
   const history = getScanHistory();
   const entry = {
-    id: Date.now().toString(), query,
-    materialName: result.materialName, materialClass: result.materialClass,
-    riskLevel: result.riskLevel, petroloadScore: result.petroloadScore,
-    healthScore: result.healthScore, timestamp: new Date().toISOString(),
+    id: Date.now().toString(), 
+    query,
+    materialName: result.materialName, 
+    materialClass: result.materialClass,
+    riskLevel: result.riskLevel, 
+    petroloadScore: result.petroloadScore,
+    healthScore: result.healthScore, 
+    timestamp: new Date().toISOString(),
   };
+  
   const filtered = history.filter((h) => h.query.toLowerCase() !== query.toLowerCase());
   const updated = [entry, ...filtered].slice(0, MAX_HISTORY);
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch {}
+  
+  try { 
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); 
+  } catch {}
+  
   return updated;
 }
-{/* In your SearchBar.jsx, enhance the suggestion display */}
-{suggestions.map((s, idx) => (
-  <button
-    key={`${s.label}-${idx}`}
-    data-testid={`suggestion-${idx}`}
-    onMouseDown={(e) => {
-      e.preventDefault();
-      handleSelectSuggestion(s);
-    }}
-    onMouseEnter={() => setActiveIdx(idx)}
-    className="w-full text-left px-4 py-3 flex items-center gap-3 transition-colors duration-100"
-    style={{
-      fontFamily: "'Inter', sans-serif",
-      backgroundColor: activeIdx === idx ? 'rgba(180, 83, 9, 0.04)' : 'transparent',
-    }}
-  >
-    <Search className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#86868B' }} />
-    
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <span className="text-sm" style={{ color: '#1D1D1F' }}>
-          {s.label}
-        </span>
-        {/* ✨ NEW: Impact indicator dot */}
-        {s.petroloadScore != null && (
-          <span 
-            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-            style={{ 
-              backgroundColor: s.petroloadScore >= 0.8 ? '#EF4444' : 
-                              s.petroloadScore >= 0.5 ? '#F59E0B' : '#10B981' 
-            }}
-          />
-        )}
-      </div>
-      {s.materialName && s.materialName !== s.label && (
-        <span className="text-[0.6rem] ml-1" style={{ color: '#86868B' }}>
-          ({s.materialName})
-        </span>
-      )}
-    </div>
-
-    {/* ✨ NEW: Alternatives count badge */}
-    {s.alternativesCount > 0 && (
-      <span
-        className="text-[0.65rem] px-2 py-0.5 rounded-full flex-shrink-0"
-        style={{
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          color: '#10B981',
-          fontFamily: "'Inter', sans-serif",
-        }}
-      >
-        {s.alternativesCount} alt
-      </span>
-    )}
-
-    <span
-      className="text-[0.65rem] px-2 py-0.5 rounded-full flex-shrink-0"
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        backgroundColor: s.type === 'material' ? 'rgba(180, 83, 9, 0.08)' : 'rgba(29, 29, 31, 0.05)',
-        color: s.type === 'material' ? '#B45309' : '#86868B',
-      }}
-    >
-      {s.type}
-    </span>
-  </button>
-))}
 
 export function clearScanHistory() {
-  try { localStorage.removeItem(HISTORY_KEY); } catch {}
+  try { 
+    localStorage.removeItem(HISTORY_KEY); 
+  } catch {}
 }
