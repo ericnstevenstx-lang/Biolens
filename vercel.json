@@ -6,8 +6,8 @@
     "env": {
       "CI": "false",
       "GENERATE_SOURCEMAP": "false",
-      "NODE_OPTIONS": "--max_old_space_size=4096"
+      "NODE_OPTIONS": "--max_old_space_size=4096",
+      "SKIP_PREFLIGHT_CHECK": "true"
     }
   }
 }
-
