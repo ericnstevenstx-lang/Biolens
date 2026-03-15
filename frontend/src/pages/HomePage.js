@@ -1,3 +1,4 @@
+import { lookupProductByBarcode } from "@/lib/biolens";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Scan, AlertTriangle, Leaf, ArrowRight, ScanBarcode, Search, BarChart3, Layers, Flag } from "lucide-react";
@@ -121,23 +122,40 @@ export default function HomePage() {
   };
 
   const handleBarcodeScan = async (barcode) => {
-    setShowScanner(false);
-    setScanLoading(true);
-    try {
-      const res = await axios.post(`${API}/barcode/lookup`, { barcode });
-      const product = res.data;
-      if (product && product.title) {
-        addRecentSearch(product.title);
-        navigate(`/results?q=${encodeURIComponent(product.title)}&barcode=${encodeURIComponent(barcode)}`);
-      } else {
-        navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
+  console.log("📸 Scanned barcode:", barcode);
+  setShowScanner(false);
+  setScanLoading(true);
+  
+  try {
+    // ✅ Use FREE Open Beauty Facts / Open Food Facts lookup
+    const result = await lookupProductByBarcode(barcode);
+    
+    if (result.success) {
+      console.log("✅ Product found:", result.product.name);
+      
+      // Log company info if available
+      if (result.companyInfo) {
+        console.log("🏢 Company:", result.companyInfo.name, "-", result.companyInfo.sector);
       }
-    } catch {
+      
+      // Add to recent searches
+      addRecentSearch(result.product.name);
+      
+      // Navigate with both product name and barcode
+      navigate(`/results?q=${encodeURIComponent(result.product.name)}&barcode=${encodeURIComponent(barcode)}`);
+    } else {
+      // Product not found - navigate with barcode as fallback
+      console.log("❌ Not found:", result.message);
       navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
-    } finally {
-      setScanLoading(false);
     }
-  };
+  } catch (error) {
+    console.error("💥 Barcode lookup error:", error);
+    // Fallback: navigate with barcode
+    navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
+  } finally {
+    setScanLoading(false);
+  }
+};
 
   return (
     <div data-testid="home-page">
