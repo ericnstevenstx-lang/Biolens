@@ -1,0 +1,14 @@
+# Query: emergent
+
+5 results - 4 files
+
+
+
+backend_test.py:
+  7:     def __init__(self, base_url="https://material-check.preview.emergentagent.com/api"):
+
+backend/requirements.txt:
+  
+
+backend/tests/test_biolens_api.py:
+  9: BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://material-check.preview.emergentagent.com')
