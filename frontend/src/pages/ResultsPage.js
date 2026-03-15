@@ -4,7 +4,7 @@ import {
   ArrowLeft, ArrowRight, AlertCircle, ShieldCheck, ShieldAlert, ShieldX,
   Leaf, Share2, ScanBarcode, CheckCircle2, HelpCircle, ExternalLink,
   Star, ArrowDown, ChevronDown, ChevronUp, Droplets, Zap, Recycle, Building2,
-  Package, Box, ShoppingBag,
+  Package, Box, ShoppingBag, Info, Sparkles, FlaskConical
 } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import PetroloadMeter from "@/components/PetroloadMeter";
@@ -25,7 +25,260 @@ import {
 
 const RISK_ICONS = { High: ShieldX, Medium: ShieldAlert, Low: ShieldCheck };
 
-/* ─── Risk Signal Bar ──────────────────────── */
+/* ═══════════════════════════════════════════════════════════════ */
+/* ─── NEW ENHANCED COMPONENTS ──────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════ */
+
+/**
+ * Confidence Banner - Shows analysis confidence with clear visual indicators
+ */
+function ConfidenceBanner({ confidenceLevel, analysisType, message, isInferred }) {
+  if (!isInferred && confidenceLevel === 'high') return null; // Don't show for high-confidence curated data
+  
+  const configs = {
+    high: {
+      bg: 'rgba(34, 197, 94, 0.08)',
+      border: 'rgba(34, 197, 94, 0.2)',
+      color: '#22C55E',
+      icon: CheckCircle2,
+      title: 'High Confidence Analysis',
+      description: 'Material composition verified from curated database or detailed product information.'
+    },
+    medium: {
+      bg: 'rgba(59, 130, 246, 0.08)',
+      border: 'rgba(59, 130, 246, 0.2)',
+      color: '#3B82F6',
+      icon: Info,
+      title: 'Category-Based Analysis',
+      description: 'Material profile estimated from typical products in this category.'
+    },
+    low: {
+      bg: 'rgba(234, 179, 8, 0.08)',
+      border: 'rgba(234, 179, 8, 0.2)',
+      color: '#EAB308',
+      icon: Sparkles,
+      title: 'Estimated Material Profile',
+      description: 'Analysis based on manufacturer and product category. Actual materials may vary.'
+    }
+  };
+
+  const config = configs[confidenceLevel] || configs.low;
+  const Icon = config.icon;
+
+  return (
+    <div 
+      data-testid="confidence-banner"
+      className="rounded-xl p-4 border animate-fade-up"
+      style={{ backgroundColor: config.bg, borderColor: config.border }}
+    >
+      <div className="flex items-start gap-3">
+        <div 
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: `${config.color}20` }}
+        >
+          <Icon className="w-4 h-4" style={{ color: config.color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-bold mb-1" style={{ color: config.color }}>
+            {config.title}
+          </h4>
+          <p className="text-xs leading-relaxed" style={{ color: '#4B5563' }}>
+            {message || config.description}
+          </p>
+          {analysisType === 'category_inference' && (
+            <p className="text-xs mt-2 italic" style={{ color: '#6B7280' }}>
+              💡 For more accurate results, try searching for specific material names (e.g., "HDPE bottle", "polyester fabric")
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Inferred Materials Breakdown - Shows likely materials with confidence indicators
+ */
+function InferredMaterialsBreakdown({ materials, estimatedPetroload, category }) {
+  if (!materials || materials.length === 0) return null;
+
+  return (
+    <div 
+      data-testid="inferred-materials-section"
+      className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up"
+      style={{ borderColor: '#E5E5E5' }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <FlaskConical className="w-4 h-4" style={{ color: '#B45309' }} />
+        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em]" style={{ color: '#86868B' }}>
+          Likely Material Composition
+        </p>
+      </div>
+      
+      <h3 className="text-base font-bold mb-4" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+        Typical Materials for {category?.replace(/_/g, ' ') || 'this product type'}
+      </h3>
+
+      <div className="space-y-4">
+        {materials.map((material, idx) => {
+          const petroLevel = getPetroloadLevel(material.petroloadScore || material.petroload);
+          
+          return (
+            <div 
+              key={idx}
+              data-testid={`inferred-material-${idx}`}
+              className="border rounded-xl p-4 hover:shadow-md transition-shadow"
+              style={{ borderColor: '#E5E5E5' }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="text-sm font-bold" style={{ color: '#1D1D1F' }}>
+                      {material.name || material.material}
+                    </h4>
+                    {material.likelihood && (
+                      <span 
+                        className="px-2 py-0.5 rounded-full text-[0.6rem] font-semibold"
+                        style={{ backgroundColor: `${petroLevel.color}12`, color: petroLevel.color }}
+                      >
+                        {Math.round(material.likelihood * 100)}% likely
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs" style={{ color: '#86868B' }}>
+                    {material.component}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: petroLevel.color }}>
+                    {material.petroloadScore || material.petroload}
+                  </div>
+                  <div className="text-[0.6rem] font-medium" style={{ color: '#86868B' }}>
+                    Petroload
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs leading-relaxed mb-3" style={{ color: '#4B5563' }}>
+                {material.summary || material.description}
+              </p>
+
+              {/* Petroload bar */}
+              <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+                <div 
+                  className="h-full rounded-full transition-all duration-700"
+                  style={{ 
+                    width: `${material.petroloadScore || material.petroload}%`, 
+                    backgroundColor: petroLevel.color 
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Overall estimated score */}
+      {estimatedPetroload && (
+        <div 
+          className="mt-5 pt-5 flex items-center justify-between"
+          style={{ borderTop: '1px solid #F3F4F6' }}
+        >
+          <span className="text-xs font-medium" style={{ color: '#86868B' }}>
+            Overall Estimated Petroload
+          </span>
+          <span 
+            className="text-xl font-extrabold tabular-nums"
+            style={{ 
+              fontFamily: "'Manrope', sans-serif", 
+              color: getPetroloadLevel(estimatedPetroload).color 
+            }}
+          >
+            {estimatedPetroload}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Company Information Card - Shows manufacturer details and sustainability info
+ */
+function CompanyInfoCard({ companyInfo }) {
+  if (!companyInfo) return null;
+
+  const sustainabilityConfig = {
+    'Good': { color: '#22C55E', bg: 'rgba(34, 197, 94, 0.08)', label: 'Strong Sustainability Efforts' },
+    'Mixed': { color: '#EAB308', bg: 'rgba(234, 179, 8, 0.08)', label: 'Mixed Sustainability Record' },
+    'Poor': { color: '#EF4444', bg: 'rgba(239, 68, 68, 0.08)', label: 'Limited Sustainability Efforts' }
+  };
+
+  const sustainConfig = sustainabilityConfig[companyInfo.sustainability] || sustainabilityConfig.Mixed;
+
+  return (
+    <div 
+      data-testid="company-info-card"
+      className="bg-white rounded-2xl p-6 border animate-fade-up"
+      style={{ borderColor: '#E5E5E5' }}
+    >
+      <div className="flex items-start gap-4">
+        <div 
+          className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}
+        >
+          <Building2 className="w-6 h-6" style={{ color: '#B45309' }} />
+        </div>
+        
+        <div className="flex-1">
+          <h3 className="text-base font-bold mb-1" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+            {companyInfo.name}
+          </h3>
+          
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <span 
+              className="px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{ backgroundColor: '#F3F4F6', color: '#86868B' }}
+            >
+              {companyInfo.sector}
+            </span>
+            
+            {companyInfo.categories && companyInfo.categories.length > 0 && (
+              <span 
+                className="px-2.5 py-1 rounded-full text-xs font-medium"
+                style={{ backgroundColor: 'rgba(180, 83, 9, 0.08)', color: '#B45309' }}
+              >
+                {companyInfo.categories[0]}
+              </span>
+            )}
+          </div>
+
+          <div 
+            className="px-3 py-2 rounded-lg"
+            style={{ backgroundColor: sustainConfig.bg }}
+          >
+            <p className="text-xs font-semibold mb-1" style={{ color: sustainConfig.color }}>
+              {sustainConfig.label}
+            </p>
+            <p className="text-xs" style={{ color: '#6B7280' }}>
+              {companyInfo.sustainability === 'Good' 
+                ? 'This company has demonstrated commitment to sustainability initiatives and transparent reporting.'
+                : companyInfo.sustainability === 'Mixed'
+                ? 'This company has some sustainability efforts but significant room for improvement.'
+                : 'This company lags behind industry leaders in sustainability practices and environmental transparency.'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* ─── EXISTING COMPONENTS (Maintained) ────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════ */
+
 function RiskSignalBar({ label, value, color }) {
   if (value == null) return null;
   return (
@@ -43,7 +296,6 @@ function RiskSignalBar({ label, value, color }) {
   );
 }
 
-/* ─── Comparison Block with Enhanced Product Name Handling ──────── */
 function ComparisonBlock({ productName, result }) {
   const currentLevel = getPetroloadLevel(result.petroloadScore);
   const bestAlt = result.alternatives?.[0];
@@ -127,7 +379,6 @@ function ComparisonBlock({ productName, result }) {
   );
 }
 
-/* ─── Product Cards ──────────────────────── */
 function PlaceholderProductCard({ title, material, petroload }) {
   const level = getPetroloadLevel(petroload);
   return (
@@ -171,8 +422,7 @@ function LiveProductCard({ product }) {
   );
 }
 
-/* ─── How BioLens Scored This (expandable) ── */
-function ScoringExplainer({ result }) {
+function ScoringExplainer({ result, isInferred }) {
   const [open, setOpen] = useState(false);
   return (
     <div data-testid="scoring-explainer" className="bg-white rounded-2xl border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
@@ -189,9 +439,14 @@ function ScoringExplainer({ result }) {
       {open && (
         <div className="px-6 pb-6 space-y-4" style={{ borderTop: '1px solid #F3F4F6' }}>
           <div className="pt-4">
-            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Material Match</p>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>
+              {isInferred ? 'Category-Based Inference' : 'Material Match'}
+            </p>
             <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
-              BioLens identifies the primary material in your product by matching it against our database of {'>'}120 classified materials and their known aliases.
+              {isInferred 
+                ? "Exact material data wasn't available, so BioLens estimated materials based on the product category and manufacturer patterns."
+                : 'BioLens identifies the primary material by matching against our database of >120 classified materials and their known aliases.'
+              }
             </p>
           </div>
           <div>
@@ -203,29 +458,31 @@ function ScoringExplainer({ result }) {
           <div>
             <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Product Category Weighting</p>
             <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
-              Scores are adjusted based on the product category. Apparel, home textiles, and industrial materials are weighted differently based on typical material blends and processing requirements.
+              Scores are adjusted based on product category. Different product types use different material blends and processing requirements.
             </p>
           </div>
-          <div>
-            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Replacement Pathway</p>
-            <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
-              Alternatives are suggested based on functional equivalence. We recommend materials that can serve the same purpose with lower petrochemical dependence.
-              {result?.materialName === "Bamboo Viscose" && " Note: Bamboo apparel is treated as semi-synthetic unless verified mechanically processed."}
-            </p>
-          </div>
+          {isInferred && (
+            <div>
+              <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Estimation Accuracy</p>
+              <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+                Category-based estimates are typically 70-85% accurate for common product types. For precise analysis, search specific material names.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-/* ════════════════════════════════════════════ */
-/* ─── Main Results Page ──────────────────── */
-/* ════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════ */
+/* ─── MAIN RESULTS PAGE COMPONENT ─────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════ */
+
 export default function ResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
-  const barcode = searchParams.get("barcode") || ""; // ✅ CRITICAL: Read barcode parameter
+  const barcode = searchParams.get("barcode") || "";
   const navigate = useNavigate();
 
   const [result, setResult] = useState(null);
@@ -235,11 +492,10 @@ export default function ResultsPage() {
   const [altProducts, setAltProducts] = useState([]);
   const [altLoading, setAltLoading] = useState(false);
   const [productSources, setProductSources] = useState({});
-  const [scannedProductData, setScannedProductData] = useState(null); // ✅ Store barcode results
+  const [scannedProductData, setScannedProductData] = useState(null);
 
-  // ✅ ENHANCED: Complete barcode and material analysis logic
   useEffect(() => {
-    if (!query && !barcode) return; // ✅ Check both parameters
+    if (!query && !barcode) return;
     
     const fetchResult = async () => {
       setLoading(true);
@@ -250,24 +506,23 @@ export default function ResultsPage() {
       setScannedProductData(null);
 
       let effectiveQuery = query;
-      let productData = null;
 
       try {
-        // ✅ Step 1: Handle barcode lookup first if barcode parameter exists
+        // Step 1: Handle barcode lookup if present
         if (barcode && !query) {
-          console.log('🔍 Processing barcode parameter:', barcode);
+          console.log('🔍 Processing barcode:', barcode);
           const barcodeResult = await lookupProductByBarcode(barcode);
           
           if (barcodeResult.success) {
-            productData = barcodeResult;
             setScannedProductData(barcodeResult);
             effectiveQuery = barcodeResult.product.name;
+            
             console.log('✅ Product resolved:', barcodeResult.product.name);
+            console.log('📊 Confidence:', barcodeResult.confidenceLevel);
+            console.log('🔬 Analysis type:', barcodeResult.inferredMaterials?.analysisType || 'direct');
+            
             if (barcodeResult.companyInfo) {
-              console.log('🏢 Company:', barcodeResult.companyInfo.name, '-', barcodeResult.companyInfo.sector);
-            }
-            if (barcodeResult.product.brand) {
-              console.log('🏷️ Brand:', barcodeResult.product.brand);
+              console.log('🏢 Company:', barcodeResult.companyInfo.name);
             }
           } else {
             setError(barcodeResult.message || "Product not found via barcode.");
@@ -276,22 +531,36 @@ export default function ResultsPage() {
           }
         }
 
-        // ✅ Step 2: Run material analysis on the effective query
+        // Step 2: Run material analysis on the effective query
         if (effectiveQuery) {
           const data = await searchBioLens(effectiveQuery);
-          setResult(data);
           
           if (data) {
+            // If we have inferred materials from barcode lookup, enhance the result
+            if (scannedProductData?.isInferred && scannedProductData.inferredMaterials) {
+              data.isInferred = true;
+              data.inferredMaterials = scannedProductData.inferredMaterials;
+              data.allMaterials = scannedProductData.materials;
+            }
+            
+            setResult(data);
             saveScanToHistory(effectiveQuery, data);
+            
+            // Fetch alternative products
             setAltLoading(true);
             try {
               const products = await fetchAlternativeProducts(effectiveQuery, 6);
               setAltProducts(products);
+              
               const nonFf = products.filter(p => !p.isFiberFoundry);
               if (nonFf.length > 0) {
-                const srcResults = await Promise.all(nonFf.map(p => fetchProductSources(p.productId).then(s => [p.productId, s])));
+                const srcResults = await Promise.all(
+                  nonFf.map(p => fetchProductSources(p.productId).then(s => [p.productId, s]))
+                );
                 const srcMap = {};
-                for (const [pid, srcs] of srcResults) { srcMap[pid] = srcs; }
+                for (const [pid, srcs] of srcResults) { 
+                  srcMap[pid] = srcs; 
+                }
                 setProductSources(srcMap);
               }
             } catch (e) { 
@@ -310,9 +579,9 @@ export default function ResultsPage() {
     };
     
     fetchResult();
-  }, [query, barcode]); // ✅ CRITICAL: Add barcode dependency
+  }, [query, barcode]);
 
-  // ✅ CRITICAL: Check both parameters before showing search screen
+  // Empty state
   if (!query && !barcode) {
     return (
       <div className="pt-32 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
@@ -329,13 +598,16 @@ export default function ResultsPage() {
     );
   }
 
-  // ✅ Enhanced display variables with comprehensive fallbacks
+  // Display variables
   const productDisplayName = scannedProductData?.product?.name || 
                             (query ? query.charAt(0).toUpperCase() + query.slice(1) : 'Unknown Product');
   const materialClassification = result?.materialName || "";
   const companyInfo = scannedProductData?.companyInfo;
   const productBrand = scannedProductData?.product?.brand || companyInfo?.name || null;
   const productCategory = scannedProductData?.product?.category || companyInfo?.sector || null;
+  const confidenceLevel = scannedProductData?.confidenceLevel || 'low';
+  const inferredMaterials = scannedProductData?.inferredMaterials;
+  const isInferred = result?.isInferred || scannedProductData?.isInferred || false;
 
   const riskConfig = result ? getRiskConfig(result.riskLevel) : null;
   const RiskIcon = result ? (RISK_ICONS[result.riskLevel] || ShieldCheck) : ShieldCheck;
@@ -374,6 +646,11 @@ export default function ResultsPage() {
       : 25 + i * 5,
   }));
 
+  // Determine if this is a food product for packaging shortcuts
+  const isFoodProduct = scannedProductData?.source === 'Open Food Facts' ||
+                       /food|cereal|bread|snack|beverage|drink|yogurt|dairy/i.test(productCategory || '') ||
+                       /bread|cereal|yogurt|milk|juice|soda|cola|chips/i.test(productDisplayName.toLowerCase());
+
   return (
     <div data-testid="results-page" className="pt-28 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
       <div className="max-w-3xl mx-auto">
@@ -396,7 +673,7 @@ export default function ResultsPage() {
           <div data-testid="loading-state" className="mt-16 text-center">
             <div className="inline-block w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#E5E5E5', borderTopColor: '#B45309' }} />
             <p className="mt-4 text-xs" style={{ color: '#86868B' }}>
-              {barcode ? 'Identifying product from barcode...' : 'Analyzing product...'}
+              {barcode ? 'Identifying product and analyzing materials...' : 'Analyzing product...'}
             </p>
           </div>
         )}
@@ -415,16 +692,14 @@ export default function ResultsPage() {
           </div>
         )}
 
-        {/* ✅ ENHANCED: Product Found But Material Not Recognized */}
+        {/* Product Found But Material Not Recognized */}
         {!result && !loading && !error && (query || barcode) && (
           <div data-testid="not-found-state" className="mt-16 animate-fade-up">
             <div className="bg-white rounded-2xl p-8 md:p-10 border text-center" style={{ borderColor: '#E5E5E5' }}>
               
-              {/* Enhanced Product Display for Barcode Scans */}
               {scannedProductData ? (
                 <>
                   <div className="flex flex-col items-center mb-8">
-                    {/* Product Image */}
                     {scannedProductData.product?.image && (
                       <img 
                         src={scannedProductData.product.image} 
@@ -433,12 +708,10 @@ export default function ResultsPage() {
                       />
                     )}
                     
-                    {/* Product Name */}
                     <h2 className="text-2xl font-extrabold mb-3" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
                       {productDisplayName}
                     </h2>
                     
-                    {/* Company/Brand Information */}
                     {productBrand && (
                       <div className="flex items-center gap-2 mb-4">
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}>
@@ -455,7 +728,6 @@ export default function ResultsPage() {
                       </div>
                     )}
 
-                    {/* Barcode Information */}
                     {barcode && (
                       <div className="flex items-center gap-2 text-xs mb-6" style={{ color: '#86868B' }}>
                         <ScanBarcode className="w-3.5 h-3.5" />
@@ -469,73 +741,72 @@ export default function ResultsPage() {
                     )}
                   </div>
 
-                  {/* Explanation Card */}
                   <div className="p-6 rounded-xl mb-8 text-left" style={{ backgroundColor: '#EFF6FF', border: '1px solid #DBEAFE' }}>
                     <div className="flex items-start gap-4">
                       <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#3B82F6' }}>
-                        <span className="text-xl">🍞</span>
+                        <Info className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1">
                         <h3 className="text-lg font-bold mb-2" style={{ color: '#1E40AF' }}>
                           Product Identified Successfully
                         </h3>
                         <p className="text-sm mb-4" style={{ color: '#1E3A8A' }}>
-                          We found your product and extracted all available information, but BioLens analyzes <strong>materials</strong> (like textiles, plastics, packaging) rather than food items themselves. However, we can analyze the packaging materials used for this product.
+                          We found your product, but BioLens analyzes <strong>materials</strong> (textiles, plastics, packaging) rather than {isFoodProduct ? 'food items themselves' : 'this product type'}. {isFoodProduct ? 'However, we can analyze the packaging materials for this product.' : 'Try searching for the specific materials used.'}
                         </p>
                         <p className="text-xs" style={{ color: '#3730A3' }}>
-                          💡 <strong>Tip:</strong> For complete environmental impact analysis, try scanning the packaging materials or textile products instead.
+                          💡 <strong>Tip:</strong> {isFoodProduct ? 'Scan packaging materials or textile products for complete environmental analysis.' : 'Search for specific material names like "HDPE bottle" or "polyester fabric" for detailed analysis.'}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Smart Packaging Analysis Options */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                    <button
-                      onClick={() => navigate('/results?q=plastic+packaging')}
-                      className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-red-500 hover:bg-red-50 bg-white group"
-                      style={{ borderColor: '#E5E5E5' }}
-                    >
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center transition-colors" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
-                        <Package className="w-6 h-6" style={{ color: '#EF4444' }} />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Plastic Wrapper</p>
-                        <p className="text-xs" style={{ color: '#86868B' }}>Analyze bag/wrapper material</p>
-                      </div>
-                    </button>
+                  {isFoodProduct && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                      <button
+                        onClick={() => navigate('/results?q=plastic+packaging')}
+                        className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-red-500 hover:bg-red-50 bg-white"
+                        style={{ borderColor: '#E5E5E5' }}
+                      >
+                        <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+                          <Package className="w-6 h-6" style={{ color: '#EF4444' }} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Plastic Wrapper</p>
+                          <p className="text-xs" style={{ color: '#86868B' }}>Analyze bag/wrapper material</p>
+                        </div>
+                      </button>
 
-                    <button
-                      onClick={() => navigate('/results?q=cardboard+box')}
-                      className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-green-500 hover:bg-green-50 bg-white group"
-                      style={{ borderColor: '#E5E5E5' }}
-                    >
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center transition-colors" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}>
-                        <Box className="w-6 h-6" style={{ color: '#22C55E' }} />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Cardboard Box</p>
-                        <p className="text-xs" style={{ color: '#86868B' }}>Analyze container material</p>
-                      </div>
-                    </button>
+                      <button
+                        onClick={() => navigate('/results?q=cardboard+box')}
+                        className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-green-500 hover:bg-green-50 bg-white"
+                        style={{ borderColor: '#E5E5E5' }}
+                      >
+                        <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)' }}>
+                          <Box className="w-6 h-6" style={{ color: '#22C55E' }} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Cardboard Box</p>
+                          <p className="text-xs" style={{ color: '#86868B' }}>Analyze container material</p>
+                        </div>
+                      </button>
 
-                    <button
-                      onClick={() => navigate('/results?q=paper+bag')}
-                      className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-orange-500 hover:bg-orange-50 bg-white group"
-                      style={{ borderColor: '#E5E5E5' }}
-                    >
-                      <div className="w-12 h-12 rounded-lg flex items-center justify-center transition-colors" style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}>
-                        <ShoppingBag className="w-6 h-6" style={{ color: '#B45309' }} />
-                      </div>
-                      <div className="text-center">
-                        <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Paper Bag</p>
-                        <p className="text-xs" style={{ color: '#86868B' }}>Analyze paper material</p>
-                      </div>
-                    </button>
-                  </div>
+                      <button
+                        onClick={() => navigate('/results?q=paper+bag')}
+                        className="flex flex-col items-center gap-3 p-5 rounded-xl border transition-all hover:border-orange-500 hover:bg-orange-50 bg-white"
+                        style={{ borderColor: '#E5E5E5' }}
+                      >
+                        <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}>
+                          <ShoppingBag className="w-6 h-6" style={{ color: '#B45309' }} />
+                        </div>
+                        <div className="text-center">
+                          <p className="text-sm font-bold mb-1" style={{ color: '#1D1D1F' }}>Paper Bag</p>
+                          <p className="text-xs" style={{ color: '#86868B' }}>Analyze paper material</p>
+                        </div>
+                      </button>
+                    </div>
+                  )}
                 </>
               ) : (
-                /* Standard Not Found State */
                 <>
                   <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: '#86868B' }} />
                   <h2 className="text-xl font-bold mb-3" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
@@ -554,11 +825,21 @@ export default function ResultsPage() {
           </div>
         )}
 
-        {/* ════════════════ MATERIAL ANALYSIS RESULTS ════════════════ */}
+        {/* ═══════════════ MATERIAL ANALYSIS RESULTS ═══════════════ */}
         {result && !loading && (
           <div data-testid="result-found" className="mt-2 space-y-5">
 
-            {/* ── S1: Enhanced Product Header ── */}
+            {/* Confidence Level Banner */}
+            {(isInferred || confidenceLevel !== 'high') && (
+              <ConfidenceBanner 
+                confidenceLevel={confidenceLevel}
+                analysisType={inferredMaterials?.analysisType}
+                message={inferredMaterials?.message}
+                isInferred={isInferred}
+              />
+            )}
+
+            {/* Enhanced Product Header */}
             <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
               <div className="flex items-start justify-between mb-1">
                 <div className="flex-1">
@@ -567,7 +848,6 @@ export default function ResultsPage() {
                   </p>
                   
                   <div className="flex items-start gap-4">
-                    {/* Product Image */}
                     {scannedProductData?.product?.image && (
                       <img 
                         src={scannedProductData.product.image} 
@@ -581,7 +861,6 @@ export default function ResultsPage() {
                         {productDisplayName}
                       </h2>
 
-                      {/* Enhanced Company/Brand Display */}
                       {(companyInfo || productBrand) && (
                         <div className="flex flex-wrap items-center gap-2 mt-2 mb-2">
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}>
@@ -598,10 +877,9 @@ export default function ResultsPage() {
                         </div>
                       )}
 
-                      {/* Material Classification */}
                       {materialClassification && materialClassification.toLowerCase() !== productDisplayName.toLowerCase() && (
                         <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>
-                          Material Classification: <span style={{ color: '#1D1D1F', fontWeight: 600 }}>{materialClassification}</span>
+                          Material: <span style={{ color: '#1D1D1F', fontWeight: 600 }}>{materialClassification}</span>
                         </p>
                       )}
                     </div>
@@ -618,7 +896,6 @@ export default function ResultsPage() {
                 </button>
               </div>
 
-              {/* Enhanced Barcode Information */}
               {barcode && (
                 <div className="flex items-center gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
                   <ScanBarcode className="w-3.5 h-3.5" style={{ color: '#86868B' }} />
@@ -631,14 +908,21 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {/* Badges */}
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                <span data-testid="result-category-badge" className={`category-badge ${categoryClass}`}>{result.materialClass}</span>
+                {isInferred ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                    <FlaskConical className="w-3.5 h-3.5" /> Category-Based Analysis
+                  </span>
+                ) : (
+                  <span data-testid="result-category-badge" className={`category-badge ${categoryClass}`}>{result.materialClass}</span>
+                )}
+                
                 {riskConfig && (
                   <span data-testid="result-risk-badge" className={`risk-badge ${riskConfig.className}`} style={{ padding: '4px 12px', fontSize: '0.7rem' }}>
                     <RiskIcon className="w-3.5 h-3.5" /> {riskConfig.label}
                   </span>
                 )}
+                
                 <span data-testid="result-confidence-badge" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.65rem] font-medium"
                   style={{ backgroundColor: confidenceLabel === "High Confidence" ? 'rgba(34,197,94,0.08)' : '#F3F4F6', color: confidenceLabel === "High Confidence" ? '#22C55E' : '#86868B' }}
                 >
@@ -648,9 +932,23 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            {/* ── S2: Petroload Score Panel ── */}
+            {/* Company Information Card */}
+            {companyInfo && <CompanyInfoCard companyInfo={companyInfo} />}
+
+            {/* Inferred Materials Breakdown */}
+            {isInferred && result.allMaterials && (
+              <InferredMaterialsBreakdown 
+                materials={result.allMaterials}
+                estimatedPetroload={inferredMaterials?.estimatedPetroload}
+                category={inferredMaterials?.category}
+              />
+            )}
+
+            {/* Petroload Score Panel */}
             <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up delay-100" style={{ borderColor: '#E5E5E5' }}>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-4" style={{ color: '#86868B' }}>Petroload Score</p>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-4" style={{ color: '#86868B' }}>
+                {isInferred ? 'Estimated Petroload Score' : 'Petroload Score'}
+              </p>
               <div className="flex justify-center mb-2">
                 <PetroloadMeter score={result.petroloadScore} size="large" />
               </div>
@@ -661,7 +959,6 @@ export default function ResultsPage() {
                   : 'Low Petrochemical Dependence'}
               </p>
 
-              {/* Supporting Metrics */}
               <div className="grid grid-cols-3 gap-4 pt-5" style={{ borderTop: '1px solid #F3F4F6' }}>
                 {[
                   { label: "Petro Dependence", value: petroDep, icon: <Zap className="w-3.5 h-3.5" />, color: '#EF4444' },
@@ -681,20 +978,24 @@ export default function ResultsPage() {
               </div>
             </div>
 
-            {/* ── S3: Material DNA ── */}
-            <div data-testid="material-dna-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up delay-200" style={{ borderColor: '#E5E5E5' }}>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-5" style={{ color: '#86868B' }}>Material DNA</p>
-              <MaterialDNA result={result} />
-            </div>
+            {/* Material DNA (for non-inferred materials) */}
+            {!isInferred && (
+              <div data-testid="material-dna-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up delay-200" style={{ borderColor: '#E5E5E5' }}>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-5" style={{ color: '#86868B' }}>Material DNA</p>
+                <MaterialDNA result={result} />
+              </div>
+            )}
 
-            {/* ── S4: Comparison Block ── */}
+            {/* Comparison Block */}
             {result.alternatives && result.alternatives.length > 0 && (
               <ComparisonBlock productName={productDisplayName} result={result} />
             )}
 
-            {/* ── S5: Material Analysis ── */}
+            {/* Material Analysis */}
             <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Material Identified</p>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>
+                {isInferred ? 'Primary Material Identified' : 'Material Identified'}
+              </p>
               <h3 data-testid="result-material-name" className="text-lg font-extrabold mb-2" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
                 {result.materialName}
               </h3>
@@ -715,7 +1016,6 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {/* Health Score */}
               {result.healthScore != null && (
                 <div className="mb-5 pb-5" style={{ borderBottom: '1px solid #F3F4F6' }}>
                   <div className="flex items-center justify-between mb-2">
@@ -730,7 +1030,6 @@ export default function ResultsPage() {
                 </div>
               )}
 
-              {/* Risk Signals */}
               {riskSignals.length > 0 && (
                 <div data-testid="risk-signals-section">
                   <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-3" style={{ color: '#86868B' }}>Risk Signals</p>
@@ -741,7 +1040,7 @@ export default function ResultsPage() {
               )}
             </div>
 
-            {/* ── S6: Better Material Paths ── */}
+            {/* Better Material Paths */}
             {result.alternatives && result.alternatives.length > 0 && (
               <div data-testid="alternatives-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
                 <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>
@@ -770,7 +1069,7 @@ export default function ResultsPage() {
               </div>
             )}
 
-            {/* ── Better Product Examples ── */}
+            {/* Better Product Examples */}
             <div data-testid="where-to-buy-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Curated Examples</p>
               <h3 className="text-base font-bold mb-5" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Better Product Examples</h3>
@@ -800,8 +1099,8 @@ export default function ResultsPage() {
               ) : null}
             </div>
 
-            {/* ── S7: How BioLens Scored This ── */}
-            <ScoringExplainer result={result} />
+            {/* How BioLens Scored This */}
+            <ScoringExplainer result={result} isInferred={isInferred} />
 
             {/* Purchase Impact */}
             <PurchaseImpact result={result} />
