@@ -3,14 +3,13 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, AlertCircle, ShieldCheck, ShieldAlert, ShieldX,
   Leaf, Share2, ScanBarcode, CheckCircle2, HelpCircle, ExternalLink,
-  Star, ArrowDown, ChevronDown, ChevronUp, Droplets, Zap, Recycle,
+  Star, ArrowDown, ChevronDown, ChevronUp, Droplets, Zap, Recycle, Building2,
 } from "lucide-react";
 import SearchBar from "@/components/SearchBar";
 import PetroloadMeter from "@/components/PetroloadMeter";
 import ShareCard from "@/components/ShareCard";
 import PurchaseImpact from "@/components/PurchaseImpact";
 import MaterialDNA from "@/components/MaterialDNA";
-// ✅ SINGLE consolidated import - this replaces your duplicate imports
 import {
   searchBioLens, 
   getConfidenceLabel, 
@@ -20,12 +19,10 @@ import {
   fetchAlternativeProducts, 
   fetchProductSources, 
   getPetroloadLevel,
-  lookupProductByBarcode, // ✅ Critical for barcode scanning functionality
+  lookupProductByBarcode, // ✅ Critical for barcode functionality
 } from "@/lib/biolens";
 
 const RISK_ICONS = { High: ShieldX, Medium: ShieldAlert, Low: ShieldCheck };
-
-// ... rest of your existing code continues unchanged ...
 
 /* ─── Risk Signal Bar ──────────────────────── */
 function RiskSignalBar({ label, value, color }) {
@@ -78,7 +75,7 @@ function ComparisonBlock({ query, result }) {
         <div className="p-6" style={{ backgroundColor: `${currentLevel.color}04` }}>
           <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-2" style={{ color: currentLevel.color }}>This Product</p>
           <p className="text-base font-extrabold mb-1" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
-            {query.charAt(0).toUpperCase() + query.slice(1)}
+            {query}
           </p>
           <div className="flex items-baseline gap-1.5 mb-3">
             <span className="text-3xl font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: currentLevel.color }}>
@@ -232,7 +229,7 @@ function ScoringExplainer({ result }) {
 export default function ResultsPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q") || "";
-  const barcode = searchParams.get("barcode") || "";
+  const barcode = searchParams.get("barcode") || ""; // ✅ CRITICAL: Read barcode parameter
   const navigate = useNavigate();
 
   const [result, setResult] = useState(null);
@@ -242,44 +239,82 @@ export default function ResultsPage() {
   const [altProducts, setAltProducts] = useState([]);
   const [altLoading, setAltLoading] = useState(false);
   const [productSources, setProductSources] = useState({});
+  const [scannedProductData, setScannedProductData] = useState(null); // ✅ Store barcode results
 
+  // ✅ CRITICAL FIX: Enhanced useEffect with barcode handling
   useEffect(() => {
-    if (!query) return;
+    if (!query && !barcode) return; // ✅ Check both parameters
+    
     const fetchResult = async () => {
       setLoading(true);
       setError(null);
       setResult(null);
       setAltProducts([]);
       setProductSources({});
+      setScannedProductData(null);
+
+      let effectiveQuery = query;
+      let productData = null;
+
       try {
-        const data = await searchBioLens(query);
-        setResult(data);
-        if (data) {
-          saveScanToHistory(query, data);
-          setAltLoading(true);
-          try {
-            const products = await fetchAlternativeProducts(query, 6);
-            setAltProducts(products);
-            const nonFf = products.filter(p => !p.isFiberFoundry);
-            if (nonFf.length > 0) {
-              const srcResults = await Promise.all(nonFf.map(p => fetchProductSources(p.productId).then(s => [p.productId, s])));
-              const srcMap = {};
-              for (const [pid, srcs] of srcResults) { srcMap[pid] = srcs; }
-              setProductSources(srcMap);
+        // ✅ Step 1: Handle barcode lookup first if barcode parameter exists
+        if (barcode && !query) {
+          console.log('🔍 Processing barcode parameter:', barcode);
+          const barcodeResult = await lookupProductByBarcode(barcode);
+          
+          if (barcodeResult.success) {
+            productData = barcodeResult;
+            setScannedProductData(barcodeResult);
+            effectiveQuery = barcodeResult.product.name;
+            console.log('✅ Product resolved:', barcodeResult.product.name);
+            if (barcodeResult.companyInfo) {
+              console.log('🏢 Company:', barcodeResult.companyInfo.name, '-', barcodeResult.companyInfo.sector);
             }
-          } catch (e) { console.error("Alt products fetch failed:", e); }
-          finally { setAltLoading(false); }
+          } else {
+            setError(barcodeResult.message || "Product not found via barcode.");
+            setLoading(false);
+            return;
+          }
+        }
+
+        // ✅ Step 2: Run material analysis on the effective query
+        if (effectiveQuery) {
+          const data = await searchBioLens(effectiveQuery);
+          setResult(data);
+          
+          if (data) {
+            saveScanToHistory(effectiveQuery, data);
+            setAltLoading(true);
+            try {
+              const products = await fetchAlternativeProducts(effectiveQuery, 6);
+              setAltProducts(products);
+              const nonFf = products.filter(p => !p.isFiberFoundry);
+              if (nonFf.length > 0) {
+                const srcResults = await Promise.all(nonFf.map(p => fetchProductSources(p.productId).then(s => [p.productId, s])));
+                const srcMap = {};
+                for (const [pid, srcs] of srcResults) { srcMap[pid] = srcs; }
+                setProductSources(srcMap);
+              }
+            } catch (e) { 
+              console.error("Alt products fetch failed:", e); 
+            } finally { 
+              setAltLoading(false); 
+            }
+          }
         }
       } catch (err) {
+        console.error("ResultsPage error:", err);
         setError(err.message || "Something went wrong.");
       } finally {
         setLoading(false);
       }
     };
+    
     fetchResult();
-  }, [query]);
+  }, [query, barcode]); // ✅ CRITICAL: Add barcode dependency
 
-  if (!query) {
+  // ✅ CRITICAL FIX: Check both parameters before showing search screen
+  if (!query && !barcode) {
     return (
       <div className="pt-32 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
         <div className="max-w-3xl mx-auto text-center">
@@ -328,16 +363,18 @@ export default function ResultsPage() {
 
   // Placeholder product examples from alternatives
   const placeholderProducts = (result?.alternatives || []).slice(0, 3).map((alt, i) => ({
-    title: `${alt.name} ${query.split(' ').slice(-1)[0] || 'Product'}`,
+    title: `${alt.name} ${(scannedProductData?.product?.name || query).split(' ').slice(-1)[0] || 'Product'}`,
     material: alt.name,
     petroload: alt.materialClass === "Plant-Based" ? 10 + i * 2
       : alt.materialClass === "Natural Material" ? 12 + i * 3
       : 25 + i * 5,
   }));
 
-  // Separate product name vs material
-  const productDisplayName = query.charAt(0).toUpperCase() + query.slice(1);
+  // ✅ Enhanced product display name (uses barcode-resolved name if available)
+  const productDisplayName = scannedProductData?.product?.name || 
+                            (query ? query.charAt(0).toUpperCase() + query.slice(1) : 'Unknown Product');
   const materialClassification = result?.materialName || "";
+  const companyInfo = scannedProductData?.companyInfo;
 
   return (
     <div data-testid="results-page" className="pt-28 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
@@ -353,14 +390,16 @@ export default function ResultsPage() {
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to search
           </button>
-          <SearchBar size="small" initialQuery={query} />
+          <SearchBar size="small" initialQuery={query || productDisplayName} />
         </div>
 
         {/* Loading */}
         {loading && (
           <div data-testid="loading-state" className="mt-16 text-center">
             <div className="inline-block w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#E5E5E5', borderTopColor: '#B45309' }} />
-            <p className="mt-4 text-xs" style={{ color: '#86868B' }}>Analyzing product...</p>
+            <p className="mt-4 text-xs" style={{ color: '#86868B' }}>
+              {barcode ? 'Identifying product from barcode...' : 'Analyzing product...'}
+            </p>
           </div>
         )}
 
@@ -368,19 +407,24 @@ export default function ResultsPage() {
         {error && !loading && (
           <div data-testid="error-state" className="mt-16 text-center">
             <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: '#EF4444' }} />
-            <p className="text-sm" style={{ color: '#EF4444' }}>{error}</p>
+            <p className="text-sm mb-2" style={{ color: '#EF4444' }}>{error}</p>
+            {barcode && (
+              <p className="text-xs mb-6" style={{ color: '#86868B' }}>
+                Barcode: {barcode}
+              </p>
+            )}
             <button onClick={() => navigate("/")} className="btn-pill btn-secondary mt-6">Try another search</button>
           </div>
         )}
 
         {/* Not found */}
-        {!result && !loading && !error && query && (
+        {!result && !loading && !error && (query || barcode) && (
           <div data-testid="not-found-state" className="mt-16 animate-fade-up">
             <div className="bg-white rounded-2xl p-8 md:p-10 border text-center" style={{ borderColor: '#E5E5E5' }}>
               <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: '#86868B' }} />
               <h2 className="text-xl font-bold mb-3" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Material not recognized</h2>
               <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: '#86868B' }}>
-                We couldn't identify the primary material for "<strong style={{ color: '#1D1D1F' }}>{query}</strong>".
+                We couldn't identify the primary material for "<strong style={{ color: '#1D1D1F' }}>{productDisplayName}</strong>".
               </p>
               <button data-testid="explore-materials-fallback" onClick={() => navigate("/explore")} className="btn-pill btn-secondary">
                 Browse Materials <ArrowRight className="w-4 h-4 ml-1" />
@@ -393,23 +437,54 @@ export default function ResultsPage() {
         {result && !loading && (
           <div data-testid="result-found" className="mt-2 space-y-5">
 
-            {/* ── S1: Product Scanned ── */}
+            {/* ── S1: Product Scanned / Searched ── */}
             <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
               <div className="flex items-start justify-between mb-1">
-                <div>
+                <div className="flex-1">
                   <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1.5" style={{ color: '#86868B' }}>
                     {barcode ? 'Scanned Product' : 'Product Searched'}
                   </p>
-                  <h2 data-testid="result-product-name" className="text-xl md:text-2xl font-extrabold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
-                    {productDisplayName}
-                  </h2>
-                  {/* Separate material classification */}
-                  {materialClassification && materialClassification.toLowerCase() !== query.toLowerCase() && (
-                    <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>
-                      Material Classification: <span style={{ color: '#1D1D1F', fontWeight: 600 }}>{materialClassification}</span>
-                    </p>
-                  )}
+                  
+                  <div className="flex items-start gap-4">
+                    {/* ✅ Product Image (if available from barcode lookup) */}
+                    {scannedProductData?.product?.image && (
+                      <img 
+                        src={scannedProductData.product.image} 
+                        alt="Product" 
+                        className="w-16 h-16 object-contain rounded-lg border border-gray-100 hidden sm:block"
+                      />
+                    )}
+                    
+                    <div>
+                      <h2 data-testid="result-product-name" className="text-xl md:text-2xl font-extrabold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+                        {productDisplayName}
+                      </h2>
+
+                      {/* ✅ Enhanced Company Info Display */}
+                      {companyInfo && (
+                        <div className="flex items-center gap-2 mt-2 mb-2">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)' }}>
+                            <Building2 className="w-3 h-3" style={{ color: '#B45309' }} />
+                            <span className="text-xs font-semibold" style={{ color: '#B45309' }}>
+                              {companyInfo.name}
+                            </span>
+                          </div>
+                          <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: '#F3F4F6', color: '#86868B' }}>
+                            {companyInfo.sector}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Material classification */}
+                      {materialClassification && materialClassification.toLowerCase() !== productDisplayName.toLowerCase() && (
+                        <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>
+                          Material Classification: <span style={{ color: '#1D1D1F', fontWeight: 600 }}>{materialClassification}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
+                
                 <button data-testid="share-scan-button" onClick={() => setShowShare(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.65rem] font-medium border transition-colors duration-200"
                   style={{ color: '#1D1D1F', borderColor: '#E5E5E5', flexShrink: 0 }}
@@ -420,10 +495,16 @@ export default function ResultsPage() {
                 </button>
               </div>
 
+              {/* ✅ Enhanced Barcode Information Display */}
               {barcode && (
-                <div className="flex items-center gap-2 mb-2">
-                  <ScanBarcode className="w-3 h-3" style={{ color: '#86868B' }} />
-                  <span className="text-[0.65rem]" style={{ color: '#86868B' }}>Barcode: {barcode}</span>
+                <div className="flex items-center gap-2 mt-4 pt-3" style={{ borderTop: '1px solid #F3F4F6' }}>
+                  <ScanBarcode className="w-3.5 h-3.5" style={{ color: '#86868B' }} />
+                  <span className="text-[0.65rem]" style={{ color: '#86868B' }}>
+                    Barcode: {barcode}
+                    {scannedProductData?.source && (
+                      <span className="ml-2" style={{ color: '#22C55E' }}>• {scannedProductData.source}</span>
+                    )}
+                  </span>
                 </div>
               )}
 
@@ -485,7 +566,7 @@ export default function ResultsPage() {
 
             {/* ── S4: Comparison Block ── */}
             {result.alternatives && result.alternatives.length > 0 && (
-              <ComparisonBlock query={query} result={result} />
+              <ComparisonBlock query={productDisplayName} result={result} />
             )}
 
             {/* ── S5: Material Analysis ── */}
@@ -566,7 +647,7 @@ export default function ResultsPage() {
               </div>
             )}
 
-            {/* ── Better Product Examples (FiberFoundry plumbing intact) ── */}
+            {/* ── Better Product Examples ── */}
             <div data-testid="where-to-buy-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
               <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Curated Examples</p>
               <h3 className="text-base font-bold mb-5" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Better Product Examples</h3>
@@ -599,7 +680,7 @@ export default function ResultsPage() {
             {/* ── S7: How BioLens Scored This ── */}
             <ScoringExplainer result={result} />
 
-            {/* Purchase Impact (kept) */}
+            {/* Purchase Impact */}
             <PurchaseImpact result={result} />
 
             {/* No alternatives — good material */}
@@ -619,7 +700,7 @@ export default function ResultsPage() {
           </div>
         )}
 
-        {showShare && result && <ShareCard result={result} query={query} onClose={() => setShowShare(false)} />}
+        {showShare && result && <ShareCard result={result} query={productDisplayName} onClose={() => setShowShare(false)} />}
       </div>
     </div>
   );
