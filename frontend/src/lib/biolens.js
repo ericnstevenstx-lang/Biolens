@@ -1,6 +1,8 @@
 import { supabase } from "./supabase";
 
-// ─── Utility helpers (Enhanced) ────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// 🎯 UTILITY HELPERS (Enhanced - Maintained for Compatibility)
+// ═══════════════════════════════════════════════════════════════
 
 export function getConfidenceLabel(score) {
   if (score == null) return "Preliminary Match";
@@ -61,16 +63,15 @@ function pct(val) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ ENHANCED AUTOCOMPLETE (Powers Your SearchBar)
+// ✅ ENHANCED AUTOCOMPLETE (Powers Your SearchBar - Maintained)
 // ═══════════════════════════════════════════════════════════════
 
 export async function fetchAutocomplete(query, limit = 6) {
   if (!query || query.trim().length < 2) {
-    return []; // Always return array for consistency
+    return [];
   }
 
   try {
-    // Try enhanced search first (fuzzy matching + alternatives)
     const { data: enhancedData, error: enhancedError } = await supabase.rpc(
       'search_materials_with_alternatives',
       {
@@ -80,7 +81,6 @@ export async function fetchAutocomplete(query, limit = 6) {
     );
 
     if (!enhancedError && enhancedData && Array.isArray(enhancedData) && enhancedData.length > 0) {
-      // Transform to match SearchBar's expected format
       return enhancedData.map((material) => ({
         label: material.material_name || "",
         type: "material",
@@ -96,7 +96,6 @@ export async function fetchAutocomplete(query, limit = 6) {
     console.warn("Enhanced autocomplete unavailable, using fallback:", enhancedErr);
   }
 
-  // Graceful fallback to original autocomplete
   try {
     const { data, error } = await supabase.rpc("search_biolens_autocomplete", {
       user_query: query,
@@ -108,7 +107,6 @@ export async function fetchAutocomplete(query, limit = 6) {
       return [];
     }
     
-    // Ensure consistent return format
     return (data || []).map((s) => ({
       label: s.suggestion_label || "",
       type: s.suggestion_type || "material",
@@ -125,7 +123,9 @@ export async function fetchAutocomplete(query, limit = 6) {
   }
 }
 
-// ─── Primary Scan (Maintained for Compatibility) ───────────────
+// ═══════════════════════════════════════════════════════════════
+// 🔍 PRIMARY MATERIAL SEARCH (Text-based - Maintained)
+// ═══════════════════════════════════════════════════════════════
 
 export async function searchBioLens(query) {
   const { data, error } = await supabase.rpc("search_biolens_scan_enriched", { user_query: query });
@@ -178,7 +178,916 @@ export async function searchBioLens(query) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ✅ NEW ENHANCED FUNCTIONS (Available for Future Use)
+// 🏢 EXPANDED GS1 COMPANY PREFIX DATABASE
+// ═══════════════════════════════════════════════════════════════
+
+const GS1_COMPANY_DATABASE = {
+  // Procter & Gamble (Personal Care & Household)
+  '037000': { name: 'Procter & Gamble', sector: 'Consumer Goods', categories: ['Personal Care', 'Household Cleaning'], sustainability: 'Mixed' },
+  '030772': { name: 'Procter & Gamble', sector: 'Personal Care', categories: ['Shampoo', 'Hair Care'], sustainability: 'Mixed' },
+  
+  // Unilever (Global Consumer Goods)
+  '079400': { name: 'Unilever', sector: 'Personal Care', categories: ['Soap', 'Deodorant'], sustainability: 'Good' },
+  '041800': { name: 'Unilever', sector: 'Food & Personal Care', categories: ['Margarine', 'Body Wash'], sustainability: 'Good' },
+  
+  // Johnson & Johnson
+  '381370': { name: 'Johnson & Johnson', sector: 'Healthcare', categories: ['Medical Devices', 'Pharmaceuticals'], sustainability: 'Mixed' },
+  '381371': { name: 'Johnson & Johnson', sector: 'Consumer Products', categories: ['Baby Care', 'First Aid'], sustainability: 'Mixed' },
+  
+  // L'Oréal
+  '071249': { name: "L'Oréal", sector: 'Cosmetics', categories: ['Hair Color', 'Skincare'], sustainability: 'Mixed' },
+  '030170': { name: "L'Oréal", sector: 'Beauty', categories: ['Makeup', 'Fragrance'], sustainability: 'Mixed' },
+  
+  // Beverage Companies
+  '049000': { name: 'The Coca-Cola Company', sector: 'Beverages', categories: ['Soft Drinks', 'Juices'], sustainability: 'Poor' },
+  '012000': { name: 'PepsiCo', sector: 'Beverages & Snacks', categories: ['Soft Drinks', 'Chips'], sustainability: 'Poor' },
+  '028400': { name: 'PepsiCo', sector: 'Beverages', categories: ['Sports Drinks', 'Water'], sustainability: 'Poor' },
+  
+  // Food Companies
+  '028000': { name: 'Nestlé', sector: 'Food & Beverages', categories: ['Chocolate', 'Coffee'], sustainability: 'Poor' },
+  '030000': { name: 'Nestlé', sector: 'Food Products', categories: ['Frozen Food', 'Pet Food'], sustainability: 'Poor' },
+  '021000': { name: 'Kraft Heinz', sector: 'Food', categories: ['Condiments', 'Cheese'], sustainability: 'Mixed' },
+  '016000': { name: 'General Mills', sector: 'Food', categories: ['Cereal', 'Snacks'], sustainability: 'Mixed' },
+  '038000': { name: "Kellogg's", sector: 'Cereal & Snacks', categories: ['Breakfast Cereal', 'Crackers'], sustainability: 'Mixed' },
+  
+  // Household & Personal Care
+  '035000': { name: 'Colgate-Palmolive', sector: 'Oral Care', categories: ['Toothpaste', 'Dish Soap'], sustainability: 'Mixed' },
+  '070330': { name: 'SC Johnson', sector: 'Household Products', categories: ['Cleaners', 'Air Fresheners'], sustainability: 'Good' },
+  '062338': { name: 'Reckitt Benckiser', sector: 'Health & Hygiene', categories: ['Disinfectants', 'Pain Relief'], sustainability: 'Mixed' },
+  
+  // Clorox Company
+  '044600': { name: 'The Clorox Company', sector: 'Household Cleaning', categories: ['Bleach', 'Disinfectants'], sustainability: 'Mixed' },
+  
+  // Battery & Electronics Manufacturers
+  '039800': { name: 'Energizer', sector: 'Batteries', categories: ['Alkaline Batteries', 'Rechargeable'], sustainability: 'Mixed' },
+  '041333': { name: 'Duracell', sector: 'Batteries', categories: ['Alkaline Batteries'], sustainability: 'Mixed' },
+  
+  // 3M Company
+  '051131': { name: '3M', sector: 'Industrial Products', categories: ['Adhesives', 'Office Supplies'], sustainability: 'Mixed' },
+  '051141': { name: '3M', sector: 'Consumer Products', categories: ['Tapes', 'Home Improvement'], sustainability: 'Mixed' },
+};
+
+function getCompanyFromPrefix(barcode) {
+  const cleanBarcode = barcode.replace(/\D/g, '');
+  
+  // Try different prefix lengths (6-9 digits) for maximum coverage
+  for (let length = 6; length <= 9; length++) {
+    const prefix = cleanBarcode.substring(0, length);
+    if (GS1_COMPANY_DATABASE[prefix]) {
+      return { prefix, ...GS1_COMPANY_DATABASE[prefix] };
+    }
+  }
+  
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📦 CATEGORY-BASED MATERIAL INFERENCE PROFILES
+// ═══════════════════════════════════════════════════════════════
+
+const CATEGORY_MATERIAL_PROFILES = {
+  'household_cleaning': {
+    primary_materials: [
+      { 
+        material: 'HDPE Bottle', 
+        component: 'Container', 
+        likelihood: 0.70, 
+        petroload: 75,
+        description: 'High-density polyethylene bottle - most common for household cleaners'
+      },
+      { 
+        material: 'PP Trigger Sprayer', 
+        component: 'Dispensing mechanism', 
+        likelihood: 0.85, 
+        petroload: 78,
+        description: 'Polypropylene trigger assembly with metal spring components'
+      },
+      { 
+        material: 'BOPP Label', 
+        component: 'Product label', 
+        likelihood: 0.90, 
+        petroload: 82,
+        description: 'Biaxially oriented polypropylene film label with adhesive backing'
+      }
+    ],
+    typical_ingredients: ['Surfactants', 'Quaternary Ammonium Compounds', 'Fragrances'],
+    confidence: 'high',
+    estimated_petroload: 76
+  },
+  
+  'laundry_detergent': {
+    primary_materials: [
+      { 
+        material: 'HDPE Jug', 
+        component: 'Container', 
+        likelihood: 0.80, 
+        petroload: 75,
+        description: 'Large high-density polyethylene container for liquid detergent'
+      },
+      { 
+        material: 'PP Cap', 
+        component: 'Closure/Measuring Cup', 
+        likelihood: 0.95, 
+        petroload: 78,
+        description: 'Polypropylene cap that often doubles as a measuring cup'
+      }
+    ],
+    typical_ingredients: ['Linear Alkylbenzene Sulfonate', 'Enzymes', 'Optical Brighteners'],
+    confidence: 'high',
+    estimated_petroload: 75
+  },
+  
+  'shampoo_conditioner': {
+    primary_materials: [
+      { 
+        material: 'HDPE Bottle', 
+        component: 'Container', 
+        likelihood: 0.65, 
+        petroload: 75,
+        description: 'High-density polyethylene bottle with flip-top or pump dispenser'
+      },
+      { 
+        material: 'PP Cap', 
+        component: 'Flip Cap/Pump', 
+        likelihood: 0.90, 
+        petroload: 78,
+        description: 'Polypropylene flip-top cap or pump mechanism'
+      }
+    ],
+    typical_ingredients: ['Sodium Lauryl Sulfate', 'Silicone', 'Fragrance', 'Parabens'],
+    confidence: 'high',
+    estimated_petroload: 78
+  },
+  
+  'soft_drinks': {
+    primary_materials: [
+      { 
+        material: 'PET Bottle', 
+        component: 'Container', 
+        likelihood: 0.90, 
+        petroload: 90,
+        description: 'Polyethylene terephthalate bottle for carbonated beverages'
+      },
+      { 
+        material: 'HDPE Cap', 
+        component: 'Closure', 
+        likelihood: 0.95, 
+        petroload: 75,
+        description: 'High-density polyethylene screw cap with liner'
+      },
+      { 
+        material: 'PET Shrink Label', 
+        component: 'Label', 
+        likelihood: 0.80, 
+        petroload: 90,
+        description: 'Heat-shrink PET film label with printed graphics'
+      }
+    ],
+    confidence: 'high',
+    estimated_petroload: 87
+  },
+  
+  'batteries': {
+    primary_materials: [
+      { 
+        material: 'Steel Casing', 
+        component: 'Outer Shell', 
+        likelihood: 0.90, 
+        petroload: 45,
+        description: 'Steel cylindrical or rectangular casing for protection'
+      },
+      { 
+        material: 'Alkaline Chemistry', 
+        component: 'Internal Components', 
+        likelihood: 0.80, 
+        petroload: 35,
+        description: 'Zinc anode, manganese dioxide cathode, potassium hydroxide electrolyte'
+      },
+      { 
+        material: 'Paperboard Packaging', 
+        component: 'Retail Packaging', 
+        likelihood: 0.95, 
+        petroload: 25,
+        description: 'Cardboard blister pack or box for retail display'
+      }
+    ],
+    confidence: 'high',
+    estimated_petroload: 42
+  },
+  
+  'electronics': {
+    primary_materials: [
+      { 
+        material: 'ABS Plastic', 
+        component: 'Housing/Casing', 
+        likelihood: 0.60, 
+        petroload: 88,
+        description: 'Acrylonitrile butadiene styrene - tough plastic for electronics housings'
+      },
+      { 
+        material: 'Polycarbonate', 
+        component: 'Clear Components', 
+        likelihood: 0.30, 
+        petroload: 90,
+        description: 'Impact-resistant clear plastic for screens and lenses'
+      },
+      { 
+        material: 'FR-4 PCB', 
+        component: 'Circuit Boards', 
+        likelihood: 0.95, 
+        petroload: 65,
+        description: 'Fiberglass-reinforced epoxy laminate circuit board substrate'
+      }
+    ],
+    confidence: 'medium',
+    estimated_petroload: 81
+  },
+  
+  'cereal': {
+    primary_materials: [
+      { 
+        material: 'Paperboard Box', 
+        component: 'Outer Packaging', 
+        likelihood: 0.95, 
+        petroload: 30,
+        description: 'Recycled paperboard with printed graphics and coatings'
+      },
+      { 
+        material: 'LDPE Liner', 
+        component: 'Inner Bag', 
+        likelihood: 0.85, 
+        petroload: 82,
+        description: 'Low-density polyethylene bag to maintain freshness'
+      }
+    ],
+    confidence: 'high',
+    estimated_petroload: 55
+  },
+  
+  'bread': {
+    primary_materials: [
+      { 
+        material: 'LDPE Bag', 
+        component: 'Primary Packaging', 
+        likelihood: 0.90, 
+        petroload: 82,
+        description: 'Low-density polyethylene bag with perforations for freshness'
+      },
+      { 
+        material: 'Plastic Coated Wire Tie', 
+        component: 'Closure', 
+        likelihood: 0.80, 
+        petroload: 70,
+        description: 'Wire twist tie with plastic coating'
+      }
+    ],
+    confidence: 'high',
+    estimated_petroload: 80
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 🧠 INTELLIGENT PRODUCT CATEGORIZATION
+// ═══════════════════════════════════════════════════════════════
+
+function detectProductCategory(productName, apiCategory, company) {
+  const name = (productName || '').toLowerCase();
+  const category = (apiCategory || '').toLowerCase();
+  const companyName = company?.name?.toLowerCase() || '';
+  
+  // Cleaning Products Detection
+  if (name.includes('windex') || name.includes('lysol') || name.includes('clorox') || 
+      name.includes('cleaner') || name.includes('disinfect') || name.includes('spray') ||
+      name.includes('bleach') || name.includes('bathroom') || name.includes('kitchen cleaner') ||
+      category.includes('household cleaners') || category.includes('surface cleaner')) {
+    return 'household_cleaning';
+  }
+  
+  // Laundry Products
+  if (name.includes('tide') || name.includes('detergent') || name.includes('laundry') ||
+      name.includes('fabric softener') || name.includes('downy') || name.includes('gain') ||
+      category.includes('laundry')) {
+    return 'laundry_detergent';
+  }
+  
+  // Personal Care
+  if (name.includes('shampoo') || name.includes('conditioner') || name.includes('body wash') ||
+      name.includes('head & shoulders') || category.includes('shampoo') || 
+      category.includes('hair care') || category.includes('conditioner')) {
+    return 'shampoo_conditioner';
+  }
+  
+  // Beverages
+  if (name.includes('coke') || name.includes('pepsi') || name.includes('soda') ||
+      name.includes('coca-cola') || category.includes('carbonated') || 
+      category.includes('soft drink') || category.includes('beverages')) {
+    return 'soft_drinks';
+  }
+  
+  // Batteries & Power
+  if (name.includes('battery') || name.includes('batteries') || name.includes('energizer') ||
+      name.includes('duracell') || category.includes('batteries') || category.includes('power')) {
+    return 'batteries';
+  }
+  
+  // Electronics
+  if (category.includes('electronic') || name.includes('charger') || name.includes('adapter') ||
+      name.includes('cable') || name.includes('remote') || name.includes('headphones') ||
+      name.includes('earbuds') || category.includes('consumer electronics')) {
+    return 'electronics';
+  }
+  
+  // Food Packaging
+  if (name.includes('cereal') || category.includes('breakfast cereal') || 
+      category.includes('cereal')) {
+    return 'cereal';
+  }
+  
+  if (name.includes('bread') || category.includes('bread') || category.includes('bakery')) {
+    return 'bread';
+  }
+  
+  // Company-Based Inference
+  if (companyName.includes('clorox') || companyName.includes('sc johnson')) {
+    return 'household_cleaning';
+  }
+  if (companyName.includes('energizer') || companyName.includes('duracell')) {
+    return 'batteries';
+  }
+  if (companyName.includes('procter & gamble') || companyName.includes('p&g')) {
+    if (name.includes('tide') || name.includes('gain')) return 'laundry_detergent';
+    if (name.includes('head & shoulders') || name.includes('pantene')) return 'shampoo_conditioner';
+    return 'household_cleaning'; // Default for P&G
+  }
+  
+  return 'general';
+}
+
+function inferMaterialsFromCategory(categoryKey, productName, company) {
+  const profile = CATEGORY_MATERIAL_PROFILES[categoryKey];
+  
+  if (!profile) {
+    return {
+      category: 'unknown',
+      materials: [],
+      estimatedPetroload: null,
+      confidence: 'low',
+      analysisType: 'none',
+      message: 'Unable to determine likely materials from product information.'
+    };
+  }
+  
+  return {
+    category: categoryKey,
+    materials: profile.primary_materials,
+    typicalIngredients: profile.typical_ingredients || [],
+    estimatedPetroload: profile.estimated_petroload,
+    confidence: profile.confidence,
+    analysisType: 'category_inference',
+    message: `Material analysis based on typical ${categoryKey.replace(/_/g, ' ')} products.`
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🌐 MULTI-API BARCODE LOOKUP SYSTEM (New Enhanced System)
+// ═══════════════════════════════════════════════════════════════
+
+export async function lookupProductByBarcode(rawBarcode) {
+  if (!rawBarcode) {
+    return { success: false, error: 'No barcode provided' };
+  }
+
+  const normalizedBarcode = rawBarcode.replace(/[\s\-]/g, '');
+  console.log('🔍 Multi-route barcode lookup:', normalizedBarcode);
+
+  // Step 1: Company identification (always available, instant)
+  const companyInfo = getCompanyFromPrefix(normalizedBarcode);
+  console.log('🏢 Company identified:', companyInfo?.name || 'Unknown');
+
+  try {
+    // Step 2: Local BioLens database (fastest, most accurate)
+    const localResult = await lookupLocalDatabase(normalizedBarcode);
+    if (localResult.success) {
+      return {
+        ...localResult,
+        source: 'BioLens Database (Curated)',
+        companyInfo,
+        confidenceLevel: 'high'
+      };
+    }
+
+    // Step 3: Parallel external API lookup for maximum coverage
+    console.log('🌐 Querying external APIs...');
+    const apiPromises = [
+      lookupOpenBeautyFacts(normalizedBarcode),
+      lookupOpenFoodFacts(normalizedBarcode),
+      lookupUPCItemDB(normalizedBarcode),
+      lookupOpenProductsFacts(normalizedBarcode)
+    ];
+
+    const apiResults = await Promise.allSettled(apiPromises);
+    
+    // Find the best result (prioritize by data quality)
+    const successfulResults = apiResults
+      .filter(result => result.status === 'fulfilled' && result.value?.success)
+      .map(result => result.value);
+
+    if (successfulResults.length > 0) {
+      const bestResult = successfulResults[0]; // First successful result
+      
+      // Enhance with company info if missing
+      if (!bestResult.product.brand && companyInfo) {
+        bestResult.product.brand = companyInfo.name;
+      }
+      
+      // If no materials detected, infer from category
+      let finalMaterials = bestResult.materials;
+      let inferredData = null;
+      
+      if (!finalMaterials || finalMaterials.length === 0) {
+        const categoryKey = detectProductCategory(
+          bestResult.product.name,
+          bestResult.product.category,
+          companyInfo
+        );
+        
+        inferredData = inferMaterialsFromCategory(categoryKey, bestResult.product.name, companyInfo);
+        finalMaterials = convertInferredMaterialsToStandardFormat(inferredData);
+      }
+      
+      const confidenceLevel = calculateConfidenceLevel(bestResult, companyInfo, inferredData);
+      
+      return {
+        ...bestResult,
+        companyInfo,
+        materials: finalMaterials,
+        inferredMaterials: inferredData,
+        confidenceLevel,
+        isInferred: !!inferredData
+      };
+    }
+
+    // Step 4: Company-based fallback with smart material inference
+    if (companyInfo) {
+      const categoryKey = detectProductCategory('', '', companyInfo);
+      const inferredData = inferMaterialsFromCategory(categoryKey, '', companyInfo);
+      const materials = convertInferredMaterialsToStandardFormat(inferredData);
+      
+      return {
+        success: true,
+        source: 'Company Prefix + Category Inference',
+        isGeneric: true,
+        companyInfo,
+        product: {
+          name: `${companyInfo.name} Product`,
+          brand: companyInfo.name,
+          category: companyInfo.sector,
+          barcode: normalizedBarcode,
+        },
+        materials,
+        inferredMaterials: inferredData,
+        confidenceLevel: 'low',
+        isInferred: true,
+        message: `Identified as a ${companyInfo.name} product. Material analysis based on typical ${companyInfo.sector} products.`
+      };
+    }
+
+    // Step 5: Complete failure
+    return {
+      success: false,
+      error: 'Product not found',
+      barcode: normalizedBarcode,
+      message: `Product with barcode ${normalizedBarcode} not found in any database.`,
+      suggestions: [
+        'Try scanning from a different angle or better lighting',
+        'Search for materials by product name instead',
+        'Ensure the barcode is clean and fully visible'
+      ]
+    };
+
+  } catch (error) {
+    console.error('Barcode lookup system error:', error);
+    return {
+      success: false,
+      error: 'System error',
+      companyInfo,
+      message: 'Barcode lookup service temporarily unavailable. Please try again.',
+    };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🧴 OPEN BEAUTY FACTS API (Free - Personal Care Products)
+// ═══════════════════════════════════════════════════════════════
+
+async function lookupOpenBeautyFacts(barcode) {
+  try {
+    console.log('🧴 Checking Open Beauty Facts...');
+    
+    const response = await fetch(
+      `https://world.openbeautyfacts.org/api/v2/product/${barcode}.json`,
+      {
+        headers: {
+          'User-Agent': 'BioLens-MaterialIntelligence/1.0 (Contact: support@biolens.app)'
+        }
+      }
+    );
+
+    if (!response.ok) return { success: false };
+
+    const data = await response.json();
+    if (data.status === 0 || !data.product) return { success: false };
+
+    const product = data.product;
+    const materials = await extractMaterialsFromIngredients(
+      product.ingredients_text_en || product.ingredients_text,
+      product.packaging_text
+    );
+
+    return {
+      success: true,
+      source: 'Open Beauty Facts',
+      product: {
+        name: product.product_name || product.product_name_en || 'Unknown Beauty Product',
+        brand: extractBrandName(product.brands),
+        category: extractCategoryName(product.categories_tags),
+        barcode: barcode,
+        image: product.image_url || product.image_front_url,
+        ingredients: product.ingredients_text_en || product.ingredients_text,
+        packaging: product.packaging_text,
+      },
+      materials: materials,
+      dataQuality: {
+        completeness: calculateDataCompleteness(product),
+        lastUpdated: product.last_modified_t ? new Date(product.last_modified_t * 1000).toLocaleDateString() : null,
+      }
+    };
+
+  } catch (error) {
+    console.error('Open Beauty Facts error:', error);
+    return { success: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🥫 OPEN FOOD FACTS API (Free - Food & Beverage Products)
+// ═══════════════════════════════════════════════════════════════
+
+async function lookupOpenFoodFacts(barcode) {
+  try {
+    console.log('🥫 Checking Open Food Facts...');
+    
+    const response = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
+      {
+        headers: {
+          'User-Agent': 'BioLens-MaterialIntelligence/1.0 (Contact: support@biolens.app)'
+        }
+      }
+    );
+
+    if (!response.ok) return { success: false };
+
+    const data = await response.json();
+    if (data.status === 0 || !data.product) return { success: false };
+
+    const product = data.product;
+    const materials = await extractMaterialsFromIngredients(
+      product.ingredients_text_en || product.ingredients_text,
+      product.packaging_text
+    );
+
+    return {
+      success: true,
+      source: 'Open Food Facts',
+      product: {
+        name: product.product_name || product.product_name_en || 'Unknown Food Product',
+        brand: extractBrandName(product.brands),
+        category: extractCategoryName(product.categories_tags),
+        barcode: barcode,
+        image: product.image_url || product.image_front_url,
+        ingredients: product.ingredients_text_en || product.ingredients_text,
+        packaging: product.packaging_text,
+        nutritionGrade: product.nutrition_grades,
+        ecoScore: product.ecoscore_grade,
+      },
+      materials: materials,
+      dataQuality: {
+        completeness: calculateDataCompleteness(product),
+        lastUpdated: product.last_modified_t ? new Date(product.last_modified_t * 1000).toLocaleDateString() : null,
+      }
+    };
+
+  } catch (error) {
+    console.error('Open Food Facts error:', error);
+    return { success: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📦 UPC ITEM DB API (Free Tier - General Consumer Products)
+// ═══════════════════════════════════════════════════════════════
+
+async function lookupUPCItemDB(barcode) {
+  try {
+    console.log('📦 Checking UPC Item DB...');
+    
+    // Using free trial endpoint (100 requests/day limit)
+    const response = await fetch(
+      `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`
+    );
+
+    if (!response.ok) return { success: false };
+
+    const data = await response.json();
+    
+    if (data.code === "OK" && data.items?.length > 0) {
+      const item = data.items[0];
+      
+      return {
+        success: true,
+        source: 'UPC Item DB',
+        product: {
+          name: item.title || 'Unknown Product',
+          brand: item.brand || null,
+          category: item.category || null,
+          barcode: barcode,
+          description: item.description || null,
+          image: item.images && item.images.length > 0 ? item.images[0] : null,
+        },
+        materials: [], // Will trigger category-based inference
+        dataQuality: {
+          completeness: 75, // Estimated based on typical UPC DB data
+          lastUpdated: null
+        }
+      };
+    }
+    
+    return { success: false };
+
+  } catch (error) {
+    console.error('UPC Item DB error:', error);
+    return { success: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🌍 OPEN PRODUCTS FACTS API (Free - Broader Product Coverage)
+// ═══════════════════════════════════════════════════════════════
+
+async function lookupOpenProductsFacts(barcode) {
+  try {
+    console.log('🌍 Checking Open Products Facts...');
+    
+    const response = await fetch(
+      `https://world.openproductsfacts.org/api/v0/product/${barcode}.json`,
+      {
+        headers: {
+          'User-Agent': 'BioLens-MaterialIntelligence/1.0 (Contact: support@biolens.app)'
+        }
+      }
+    );
+
+    if (!response.ok) return { success: false };
+
+    const data = await response.json();
+    
+    if (data.status === 1 && data.product) {
+      const product = data.product;
+      
+      return {
+        success: true,
+        source: 'Open Products Facts',
+        product: {
+          name: product.product_name || product.generic_name || 'Unknown Product',
+          brand: extractBrandName(product.brands),
+          category: extractCategoryName(product.categories_tags),
+          barcode: barcode,
+          image: product.image_url || null,
+        },
+        materials: [], // Will trigger category-based inference
+        dataQuality: {
+          completeness: 60, // Estimated based on typical Open Products data
+          lastUpdated: product.last_modified_t ? new Date(product.last_modified_t * 1000).toLocaleDateString() : null
+        }
+      };
+    }
+    
+    return { success: false };
+
+  } catch (error) {
+    console.error('Open Products Facts error:', error);
+    return { success: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💾 LOCAL BIOLENS DATABASE LOOKUP
+// ═══════════════════════════════════════════════════════════════
+
+async function lookupLocalDatabase(barcode) {
+  try {
+    // Try multiple barcode formats for maximum compatibility
+    const barcodeVariations = [
+      barcode,
+      barcode.padStart(12, '0'),
+      barcode.padStart(13, '0'),
+      barcode.replace(/^0+/, '') || '0',
+    ];
+
+    const { data, error } = await supabase
+      .from('product_barcodes')
+      .select(`
+        barcode,
+        products (
+          id,
+          product_name,
+          brands (brand_name),
+          categories (category_name)
+        )
+      `)
+      .in('barcode', barcodeVariations)
+      .limit(1);
+
+    if (error || !data || data.length === 0) return { success: false };
+
+    const product = data[0];
+
+    // Get detailed material composition
+    const { data: materialData } = await supabase
+      .from('product_materials')
+      .select(`
+        percentage,
+        materials (
+          material_name,
+          material_family,
+          petroload_score,
+          biodegradability_score,
+          toxicity_score,
+          consumer_facing_summary
+        )
+      `)
+      .eq('product_id', product.products.id);
+
+    const materials = (materialData || []).map(m => ({
+      name: m.materials.material_name,
+      family: m.materials.material_family,
+      percentage: m.percentage,
+      petroloadScore: m.materials.petroload_score,
+      biodegradabilityScore: m.materials.biodegradability_score,
+      toxicityScore: m.materials.toxicity_score,
+      summary: m.materials.consumer_facing_summary,
+      source: 'curated',
+      confidence: 1.0
+    }));
+
+    return {
+      success: true,
+      product: {
+        name: product.products.product_name,
+        brand: product.products.brands?.brand_name,
+        category: product.products.categories?.category_name,
+        barcode: barcode,
+      },
+      materials: materials,
+    };
+
+  } catch (error) {
+    console.error('Local database lookup error:', error);
+    return { success: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🧬 MATERIAL EXTRACTION FROM INGREDIENTS & PACKAGING
+// ═══════════════════════════════════════════════════════════════
+
+async function extractMaterialsFromIngredients(ingredientsText, packagingText) {
+  const materials = [];
+  const detectedMaterials = new Set();
+
+  const analysisText = [ingredientsText, packagingText]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  // Comprehensive material detection patterns
+  const materialPatterns = [
+    // Common packaging plastics
+    { keywords: ['hdpe', 'high density polyethylene', 'plastic 2'], dbMatch: 'HDPE' },
+    { keywords: ['pet', 'pete', 'polyethylene terephthalate', 'plastic 1'], dbMatch: 'PET' },
+    { keywords: ['pp', 'polypropylene', 'plastic 5'], dbMatch: 'Polypropylene' },
+    { keywords: ['ldpe', 'low density polyethylene', 'plastic 4'], dbMatch: 'LDPE' },
+    { keywords: ['pvc', 'polyvinyl chloride', 'plastic 3'], dbMatch: 'PVC' },
+    { keywords: ['ps', 'polystyrene', 'plastic 6'], dbMatch: 'Polystyrene' },
+    
+    // Personal care ingredients
+    { keywords: ['sodium lauryl sulfate', 'sls'], dbMatch: 'Sodium Lauryl Sulfate' },
+    { keywords: ['sodium laureth sulfate', 'sles'], dbMatch: 'Sodium Laureth Sulfate' },
+    { keywords: ['dimethicone', 'silicone'], dbMatch: 'Silicone' },
+    { keywords: ['paraben', 'methylparaben', 'propylparaben'], dbMatch: 'Parabens' },
+    { keywords: ['cocamidopropyl betaine'], dbMatch: 'Cocamidopropyl Betaine' },
+    
+    // Other common materials
+    { keywords: ['aluminum', 'aluminium'], dbMatch: 'Aluminum' },
+    { keywords: ['glass'], dbMatch: 'Glass' },
+    { keywords: ['paper', 'cardboard'], dbMatch: 'Paper' },
+    { keywords: ['steel', 'tin'], dbMatch: 'Steel' },
+  ];
+
+  for (const pattern of materialPatterns) {
+    const found = pattern.keywords.some(keyword => analysisText.includes(keyword));
+    
+    if (found && !detectedMaterials.has(pattern.dbMatch)) {
+      detectedMaterials.add(pattern.dbMatch);
+      
+      // Match against BioLens materials database
+      const { data: matchedMaterials } = await supabase
+        .from('materials')
+        .select('material_name, material_family, petroload_score, biodegradability_score, toxicity_score, consumer_facing_summary')
+        .ilike('material_name', `%${pattern.dbMatch}%`)
+        .limit(1);
+
+      if (matchedMaterials && matchedMaterials.length > 0) {
+        const material = matchedMaterials[0];
+        materials.push({
+          name: material.material_name,
+          family: material.material_family,
+          petroloadScore: material.petroload_score,
+          biodegradabilityScore: material.biodegradability_score,
+          toxicityScore: material.toxicity_score,
+          summary: material.consumer_facing_summary,
+          source: 'detected',
+          confidence: 0.8
+        });
+      }
+    }
+  }
+
+  return materials;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 🛠️ HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+function extractBrandName(brands) {
+  if (!brands) return null;
+  return brands.split(',')[0].trim();
+}
+
+function extractCategoryName(categories) {
+  if (!categories || !Array.isArray(categories)) return null;
+  const cleaned = categories[0]?.replace('en:', '').replace(/-/g, ' ');
+  return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : null;
+}
+
+function calculateDataCompleteness(product) {
+  const fields = [
+    product.product_name,
+    product.brands,
+    product.categories_tags?.length,
+    product.ingredients_text,
+    product.packaging_text,
+    product.image_url,
+  ];
+  const filled = fields.filter(Boolean).length;
+  return Math.round((filled / fields.length) * 100);
+}
+
+function convertInferredMaterialsToStandardFormat(inferredData) {
+  if (!inferredData || !inferredData.materials) return [];
+  
+  return inferredData.materials.map(material => ({
+    name: material.material,
+    component: material.component,
+    family: 'Inferred',
+    petroloadScore: material.petroload,
+    likelihood: material.likelihood,
+    summary: material.description,
+    source: 'inferred',
+    confidence: inferredData.confidence
+  }));
+}
+
+function calculateConfidenceLevel(productResult, companyInfo, inferredData) {
+  // High confidence: Curated data or detailed ingredient lists
+  if (productResult.source === 'BioLens Database (Curated)' || 
+      (productResult.materials && productResult.materials.length > 0)) {
+    return 'high';
+  }
+  
+  // Medium confidence: Product found with category inference
+  if (productResult.product && productResult.product.category && inferredData) {
+    return 'medium';
+  }
+  
+  // Low confidence: Company-only or generic inference
+  return 'low';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ✅ ENHANCED MATERIAL SEARCH (Available for Future Use - Maintained)
 // ═══════════════════════════════════════════════════════════════
 
 export async function searchMaterialsEnhanced(query, limit = 12) {
@@ -277,7 +1186,9 @@ export function formatScore(score) {
   return `${Math.round(score * 100)}%`;
 }
 
-// ─── Alternative Products (Maintained) ─────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// 🛒 ALTERNATIVE PRODUCTS (Maintained for Compatibility)
+// ═══════════════════════════════════════════════════════════════
 
 export async function fetchAlternativeProducts(query, limit = 6) {
   const { data, error } = await supabase.rpc("get_best_alternative_products_for_query", {
@@ -309,8 +1220,6 @@ export async function fetchAlternativeProducts(query, limit = 6) {
   }));
 }
 
-// ─── Product Purchase Sources ──────────────────────────────────
-
 export async function fetchProductSources(productId) {
   const { data, error } = await supabase.rpc("get_product_purchase_sources", { 
     p_product_id: productId 
@@ -324,7 +1233,9 @@ export async function fetchProductSources(productId) {
   return data || [];
 }
 
-// ─── Global Impact Counters ────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// 🌍 GLOBAL IMPACT COUNTERS (Maintained)
+// ═══════════════════════════════════════════════════════════════
 
 export async function fetchGlobalImpact() {
   const { data, error } = await supabase.rpc("get_global_impact_counters");
@@ -337,7 +1248,9 @@ export async function fetchGlobalImpact() {
   return data && data.length > 0 ? data[0] : null;
 }
 
-// ─── Scan History (localStorage) ───────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// 💾 SCAN HISTORY (localStorage - Maintained)
+// ═══════════════════════════════════════════════════════════════
 
 const HISTORY_KEY = "biolens_scan_history";
 const MAX_HISTORY = 20;
@@ -380,454 +1293,4 @@ export function clearScanHistory() {
   try { 
     localStorage.removeItem(HISTORY_KEY); 
   } catch {}
-}
-// Add to your existing biolens.js file (keep all existing functions)
-
-/**
- * 🏢 FREE GS1 Company Prefix Lookup (No membership required)
- * Identifies manufacturer from barcode prefix using public data
- */
-function getCompanyFromPrefix(barcode) {
-  // Remove any formatting and get clean digits
-  const cleanBarcode = barcode.replace(/\D/g, '');
-  
-  // Major company prefixes (expandable database)
-  const gs1Prefixes = {
-    // Procter & Gamble (your Head & Shoulders bottle)
-    '037000': { name: 'Procter & Gamble', sector: 'Consumer Goods', sustainability: 'Mixed' },
-    '030772': { name: 'Procter & Gamble', sector: 'Personal Care', sustainability: 'Mixed' },
-    
-    // Unilever
-    '079400': { name: 'Unilever', sector: 'Personal Care', sustainability: 'Good' },
-    '041800': { name: 'Unilever', sector: 'Food & Personal Care', sustainability: 'Good' },
-    
-    // Johnson & Johnson
-    '381370': { name: 'Johnson & Johnson', sector: 'Healthcare', sustainability: 'Mixed' },
-    '381371': { name: 'Johnson & Johnson', sector: 'Consumer Products', sustainability: 'Mixed' },
-    
-    // L'Oréal
-    '071249': { name: "L'Oréal", sector: 'Cosmetics', sustainability: 'Mixed' },
-    '030170': { name: "L'Oréal", sector: 'Beauty', sustainability: 'Mixed' },
-    
-    // Beverage Companies
-    '049000': { name: 'The Coca-Cola Company', sector: 'Beverages', sustainability: 'Poor' },
-    '012000': { name: 'PepsiCo', sector: 'Beverages & Snacks', sustainability: 'Poor' },
-    '028400': { name: 'PepsiCo', sector: 'Beverages', sustainability: 'Poor' },
-    
-    // Food Companies
-    '028000': { name: 'Nestlé', sector: 'Food & Beverages', sustainability: 'Poor' },
-    '030000': { name: 'Nestlé', sector: 'Food Products', sustainability: 'Poor' },
-    '021000': { name: 'Kraft Heinz', sector: 'Food', sustainability: 'Mixed' },
-    '016000': { name: 'General Mills', sector: 'Food', sustainability: 'Mixed' },
-    '038000': { name: "Kellogg's", sector: 'Cereal & Snacks', sustainability: 'Mixed' },
-    
-    // Household & Personal Care
-    '035000': { name: 'Colgate-Palmolive', sector: 'Oral Care', sustainability: 'Mixed' },
-    '070330': { name: 'SC Johnson', sector: 'Household Products', sustainability: 'Good' },
-    '062338': { name: 'Reckitt Benckiser', sector: 'Health & Hygiene', sustainability: 'Mixed' },
-  };
-
-  // Try different prefix lengths (6, 7, 8, 9 digits)
-  for (let length = 6; length <= 9; length++) {
-    const prefix = cleanBarcode.substring(0, length);
-    if (gs1Prefixes[prefix]) {
-      return { prefix, ...gs1Prefixes[prefix] };
-    }
-  }
-
-  return null;
-}
-
-/**
- * 🔍 COMPLETE FREE barcode lookup system
- * Strategy: Local DB → Open Beauty Facts → Open Food Facts → Company Prefix Fallback
- */
-export async function lookupProductByBarcode(rawBarcode) {
-  if (!rawBarcode) {
-    return { success: false, error: 'No barcode provided' };
-  }
-
-  const normalizedBarcode = rawBarcode.replace(/[\s\-]/g, '');
-  console.log('🔍 Looking up barcode:', normalizedBarcode);
-
-  // Get company info from prefix (always available)
-  const companyInfo = getCompanyFromPrefix(normalizedBarcode);
-  console.log('🏢 Company from prefix:', companyInfo);
-
-  try {
-    // Step 1: Check your local BioLens database first (fastest)
-    const localResult = await lookupLocalDatabase(normalizedBarcode);
-    if (localResult.success) {
-      return { 
-        ...localResult, 
-        source: 'BioLens Database (Cached)',
-        companyInfo 
-      };
-    }
-
-    // Step 2: Try Open Beauty Facts (personal care, cosmetics, household)
-    const beautyResult = await lookupOpenBeautyFacts(normalizedBarcode);
-    if (beautyResult.success) {
-      // Enhance with company info if brand missing
-      if (!beautyResult.product.brand && companyInfo) {
-        beautyResult.product.brand = companyInfo.name;
-      }
-      return { ...beautyResult, companyInfo };
-    }
-
-    // Step 3: Try Open Food Facts (food, beverages, some personal care)
-    const foodResult = await lookupOpenFoodFacts(normalizedBarcode);
-    if (foodResult.success) {
-      if (!foodResult.product.brand && companyInfo) {
-        foodResult.product.brand = companyInfo.name;
-      }
-      return { ...foodResult, companyInfo };
-    }
-
-    // Step 4: Company prefix fallback (better than nothing)
-    if (companyInfo) {
-      return {
-        success: true,
-        source: 'Company Prefix Identification',
-        isGeneric: true,
-        companyInfo,
-        product: {
-          name: `${companyInfo.name} Product`,
-          brand: companyInfo.name,
-          category: companyInfo.sector,
-          barcode: normalizedBarcode,
-        },
-        materials: await getGenericMaterialsByCompany(companyInfo),
-        message: `Specific product not found, but identified as a ${companyInfo.name} product in ${companyInfo.sector}.`,
-        sustainabilityNote: getSustainabilityNote(companyInfo.sustainability)
-      };
-    }
-
-    // Step 5: Complete failure
-    return {
-      success: false,
-      error: 'Product not found',
-      barcode: normalizedBarcode,
-      message: `Product with barcode ${normalizedBarcode} not found in any database.`,
-      suggestions: [
-        'Try scanning from a different angle',
-        'Search for materials by product name instead',
-        'Ensure barcode is clean and well-lit'
-      ]
-    };
-
-  } catch (error) {
-    console.error('Barcode lookup system error:', error);
-    return {
-      success: false,
-      error: 'System error',
-      companyInfo,
-      message: 'Barcode lookup service temporarily unavailable.',
-    };
-  }
-}
-
-/**
- * 🧴 Open Beauty Facts API (FREE - perfect for your Head & Shoulders bottle)
- */
-async function lookupOpenBeautyFacts(barcode) {
-  try {
-    console.log('🧴 Checking Open Beauty Facts...');
-    
-    const response = await fetch(
-      `https://world.openbeautyfacts.org/api/v2/product/${barcode}.json`,
-      {
-        headers: {
-          'User-Agent': 'BioLens-MaterialIntelligence/1.0 (Contact: support@biolens.app)'
-        }
-      }
-    );
-
-    if (!response.ok) return { success: false };
-
-    const data = await response.json();
-    if (data.status === 0 || !data.product) return { success: false };
-
-    const product = data.product;
-    const materials = await extractMaterialsFromOpenData(product, 'beauty');
-
-    return {
-      success: true,
-      source: 'Open Beauty Facts',
-      product: {
-        name: product.product_name || product.product_name_en || 'Unknown Product',
-        brand: extractBrandName(product.brands),
-        category: extractCategoryName(product.categories_tags),
-        barcode: barcode,
-        image: product.image_url || product.image_front_url,
-        ingredients: product.ingredients_text_en || product.ingredients_text,
-        packaging: product.packaging_text,
-      },
-      materials: materials,
-      dataQuality: {
-        completeness: calculateDataCompleteness(product),
-        lastUpdated: product.last_modified_t ? new Date(product.last_modified_t * 1000).toLocaleDateString() : null,
-      }
-    };
-
-  } catch (error) {
-    console.error('Open Beauty Facts error:', error);
-    return { success: false };
-  }
-}
-
-/**
- * 🥫 Open Food Facts API (FREE - food, beverages, some household)
- */
-async function lookupOpenFoodFacts(barcode) {
-  try {
-    console.log('🥫 Checking Open Food Facts...');
-    
-    const response = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
-      {
-        headers: {
-          'User-Agent': 'BioLens-MaterialIntelligence/1.0 (Contact: support@biolens.app)'
-        }
-      }
-    );
-
-    if (!response.ok) return { success: false };
-
-    const data = await response.json();
-    if (data.status === 0 || !data.product) return { success: false };
-
-    const product = data.product;
-    const materials = await extractMaterialsFromOpenData(product, 'food');
-
-    return {
-      success: true,
-      source: 'Open Food Facts',
-      product: {
-        name: product.product_name || product.product_name_en || 'Unknown Product',
-        brand: extractBrandName(product.brands),
-        category: extractCategoryName(product.categories_tags),
-        barcode: barcode,
-        image: product.image_url || product.image_front_url,
-        ingredients: product.ingredients_text_en || product.ingredients_text,
-        packaging: product.packaging_text,
-        nutritionGrade: product.nutrition_grades,
-        ecoScore: product.ecoscore_grade,
-      },
-      materials: materials,
-      dataQuality: {
-        completeness: calculateDataCompleteness(product),
-        lastUpdated: product.last_modified_t ? new Date(product.last_modified_t * 1000).toLocaleDateString() : null,
-      }
-    };
-
-  } catch (error) {
-    console.error('Open Food Facts error:', error);
-    return { success: false };
-  }
-}
-
-/**
- * 💾 Local BioLens database lookup
- */
-async function lookupLocalDatabase(barcode) {
-  try {
-    const barcodeVariations = [
-      barcode,
-      barcode.padStart(12, '0'),
-      barcode.padStart(13, '0'),
-      barcode.replace(/^0+/, '') || '0',
-    ];
-
-    const { data, error } = await supabase
-      .from('product_barcodes')
-      .select(`
-        barcode,
-        products (
-          id,
-          product_name,
-          brands (brand_name),
-          categories (category_name)
-        )
-      `)
-      .in('barcode', barcodeVariations)
-      .limit(1);
-
-    if (error || !data || data.length === 0) return { success: false };
-
-    const product = data[0];
-
-    // Get material composition
-    const { data: materialData } = await supabase
-      .from('product_materials')
-      .select(`
-        percentage,
-        materials (
-          material_name,
-          material_family,
-          petroload_score,
-          biodegradability_score,
-          toxicity_score,
-          consumer_facing_summary
-        )
-      `)
-      .eq('product_id', product.products.id);
-
-    return {
-      success: true,
-      product: {
-        name: product.products.product_name,
-        brand: product.products.brands?.brand_name,
-        category: product.products.categories?.category_name,
-        barcode: barcode,
-      },
-      materials: (materialData || []).map(m => ({
-        name: m.materials.material_name,
-        family: m.materials.material_family,
-        percentage: m.percentage,
-        petroloadScore: m.materials.petroload_score,
-        biodegradabilityScore: m.materials.biodegradability_score,
-        toxicityScore: m.materials.toxicity_score,
-        summary: m.materials.consumer_facing_summary,
-        source: 'curated'
-      })),
-    };
-
-  } catch (error) {
-    return { success: false };
-  }
-}
-
-/**
- * 🧬 Smart material extraction from Open database product data
- */
-async function extractMaterialsFromOpenData(product, type) {
-  const materials = [];
-  const detectedKeywords = new Set();
-
-  // Collect all text for analysis
-  const analysisText = [
-    product.packaging_text,
-    product.packaging_tags?.join(' '),
-    product.ingredients_text_en,
-    product.ingredients_text,
-  ].filter(Boolean).join(' ').toLowerCase();
-
-  // Material detection patterns with BioLens database matching
-  const materialPatterns = [
-    // Common plastics
-    { keywords: ['hdpe', 'high density polyethylene', 'plastic 2'], dbMatch: 'HDPE' },
-    { keywords: ['pet', 'pete', 'polyethylene terephthalate', 'plastic 1'], dbMatch: 'PET Plastic' },
-    { keywords: ['pp', 'polypropylene', 'plastic 5'], dbMatch: 'Polypropylene' },
-    { keywords: ['ldpe', 'low density polyethylene', 'plastic 4'], dbMatch: 'LDPE' },
-    { keywords: ['pvc', 'polyvinyl chloride', 'plastic 3'], dbMatch: 'PVC' },
-    
-    // Personal care chemicals (for your Head & Shoulders)
-    { keywords: ['sodium lauryl sulfate', 'sls'], dbMatch: 'Sodium Lauryl Sulfate' },
-    { keywords: ['sodium laureth sulfate', 'sles'], dbMatch: 'Sodium Laureth Sulfate' },
-    { keywords: ['dimethicone', 'silicone'], dbMatch: 'Silicone' },
-    
-    // Other common materials
-    { keywords: ['aluminum', 'aluminium'], dbMatch: 'Aluminum' },
-    { keywords: ['glass'], dbMatch: 'Glass' },
-    { keywords: ['paper', 'cardboard'], dbMatch: 'Paper' },
-  ];
-
-  for (const pattern of materialPatterns) {
-    const found = pattern.keywords.some(keyword => analysisText.includes(keyword));
-    
-    if (found && !detectedKeywords.has(pattern.dbMatch)) {
-      detectedKeywords.add(pattern.dbMatch);
-      
-      // Match with your BioLens materials database
-      const { data: matchedMaterials } = await supabase
-        .from('materials')
-        .select('material_name, material_family, petroload_score, biodegradability_score, toxicity_score, consumer_facing_summary')
-        .ilike('material_name', `%${pattern.dbMatch}%`)
-        .limit(1);
-
-      if (matchedMaterials && matchedMaterials.length > 0) {
-        const material = matchedMaterials[0];
-        materials.push({
-          name: material.material_name,
-          family: material.material_family,
-          petroloadScore: material.petroload_score,
-          biodegradabilityScore: material.biodegradability_score,
-          toxicityScore: material.toxicity_score,
-          summary: material.consumer_facing_summary,
-          detectedFrom: type === 'beauty' ? 'ingredients/packaging' : 'packaging',
-          source: 'detected'
-        });
-      }
-    }
-  }
-
-  return materials;
-}
-
-/**
- * 🏭 Get generic materials based on company sector
- */
-async function getGenericMaterialsByCompany(companyInfo) {
-  const sectorMaterials = {
-    'Personal Care': ['HDPE', 'Polypropylene', 'Sodium Lauryl Sulfate'],
-    'Food & Beverages': ['PET Plastic', 'Aluminum', 'Paper'],
-    'Household Products': ['HDPE', 'Polypropylene', 'Sodium Lauryl Sulfate'],
-    'Consumer Goods': ['Polypropylene', 'HDPE', 'Paper'],
-  };
-
-  const materialNames = sectorMaterials[companyInfo.sector] || ['Plastic (Generic)'];
-  const materials = [];
-
-  for (const materialName of materialNames) {
-    const { data } = await supabase
-      .from('materials')
-      .select('material_name, material_family, petroload_score, biodegradability_score, toxicity_score')
-      .ilike('material_name', `%${materialName}%`)
-      .limit(1);
-
-    if (data && data.length > 0) {
-      materials.push({
-        ...data[0],
-        source: 'estimated',
-        confidence: 0.6
-      });
-    }
-  }
-
-  return materials;
-}
-
-// Helper functions
-function extractBrandName(brands) {
-  if (!brands) return null;
-  return brands.split(',')[0].trim();
-}
-
-function extractCategoryName(categories) {
-  if (!categories || !Array.isArray(categories)) return null;
-  const cleaned = categories[0]?.replace('en:', '').replace(/-/g, ' ');
-  return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : null;
-}
-
-function calculateDataCompleteness(product) {
-  const fields = [
-    product.product_name,
-    product.brands,
-    product.categories_tags?.length,
-    product.ingredients_text,
-    product.packaging_text,
-    product.image_url,
-  ];
-  const filled = fields.filter(Boolean).length;
-  return Math.round((filled / fields.length) * 100);
-}
-
-function getSustainabilityNote(rating) {
-  const notes = {
-    'Good': 'This company has shown commitment to sustainability initiatives.',
-    'Mixed': 'This company has some sustainability efforts but room for improvement.',
-    'Poor': 'This company lags behind in sustainability practices.'
-  };
-  return notes[rating] || 'Sustainability information not available.';
 }
