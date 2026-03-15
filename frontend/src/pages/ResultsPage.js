@@ -1,8 +1,3 @@
-import {
-  searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
-  saveScanToHistory, fetchAlternativeProducts, fetchProductSources, getPetroloadLevel,
-  lookupProductByBarcode, // ✅ ADD THIS IMPORT
-} from "@/lib/biolens";
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
@@ -15,12 +10,22 @@ import PetroloadMeter from "@/components/PetroloadMeter";
 import ShareCard from "@/components/ShareCard";
 import PurchaseImpact from "@/components/PurchaseImpact";
 import MaterialDNA from "@/components/MaterialDNA";
+// ✅ SINGLE consolidated import - this replaces your duplicate imports
 import {
-  searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
-  saveScanToHistory, fetchAlternativeProducts, fetchProductSources, getPetroloadLevel,
+  searchBioLens, 
+  getConfidenceLabel, 
+  getCategoryClass, 
+  getRiskConfig,
+  saveScanToHistory, 
+  fetchAlternativeProducts, 
+  fetchProductSources, 
+  getPetroloadLevel,
+  lookupProductByBarcode, // ✅ Critical for barcode scanning functionality
 } from "@/lib/biolens";
 
 const RISK_ICONS = { High: ShieldX, Medium: ShieldAlert, Low: ShieldCheck };
+
+// ... rest of your existing code continues unchanged ...
 
 /* ─── Risk Signal Bar ──────────────────────── */
 function RiskSignalBar({ label, value, color }) {
