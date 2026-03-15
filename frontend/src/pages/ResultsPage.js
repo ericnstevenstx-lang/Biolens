@@ -1,3 +1,8 @@
+import {
+  searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
+  saveScanToHistory, fetchAlternativeProducts, fetchProductSources, getPetroloadLevel,
+  lookupProductByBarcode, // ✅ ADD THIS IMPORT
+} from "@/lib/biolens";
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import {
