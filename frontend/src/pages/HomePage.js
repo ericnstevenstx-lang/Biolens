@@ -1,355 +1,676 @@
-import { lookupProductByBarcode } from "@/lib/biolens";
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Scan, AlertTriangle, Leaf, ArrowRight, ScanBarcode, Search, BarChart3, Layers, Flag } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft, ArrowRight, AlertCircle, ShieldCheck, ShieldAlert, ShieldX,
+  Leaf, Share2, ScanBarcode, CheckCircle2, HelpCircle, ExternalLink,
+  Star, ArrowDown, ChevronDown, ChevronUp, Droplets, Zap, Recycle,
+} from "lucide-react";
 import SearchBar from "@/components/SearchBar";
-import BarcodeScanner from "@/components/BarcodeScanner";
-import ScanHistory from "@/components/ScanHistory";
-import { getScanHistory, clearScanHistory, fetchGlobalImpact, getPetroloadLevel } from "@/lib/biolens";
-import axios from "axios";
+import PetroloadMeter from "@/components/PetroloadMeter";
+import ShareCard from "@/components/ShareCard";
+import PurchaseImpact from "@/components/PurchaseImpact";
+import MaterialDNA from "@/components/MaterialDNA";
+// ✅ FIXED: Single import with lookupProductByBarcode
+import {
+  searchBioLens, getConfidenceLabel, getCategoryClass, getRiskConfig,
+  saveScanToHistory, fetchAlternativeProducts, fetchProductSources, getPetroloadLevel,
+  lookupProductByBarcode, // ✅ ADDED
+} from "@/lib/biolens";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const RISK_ICONS = { High: ShieldX, Medium: ShieldAlert, Low: ShieldCheck };
 
-const EXAMPLE_SEARCHES = [
-  "poly hoodie",
-  "bamboo sheets",
-  "pet bottle",
-  "vegan leather bag",
-  "nylon rope",
-  "hemp shirt",
-];
-
-const RECENT_KEY = "biolens_recent_searches";
-
-function getRecentSearches() {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]").slice(0, 5);
-  } catch { return []; }
-}
-
-function addRecentSearch(term) {
-  try {
-    const list = getRecentSearches().filter(t => t.toLowerCase() !== term.toLowerCase());
-    list.unshift(term);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 8)));
-  } catch {}
-}
-
-/* ── Large Example Scan Card ── */
-function ExampleScanCard() {
-  const level = getPetroloadLevel(95);
+/* ─── Risk Signal Bar ──────────────────────── */
+function RiskSignalBar({ label, value, color }) {
+  if (value == null) return null;
   return (
-    <div
-      data-testid="example-scan-card"
-      className="mt-10 rounded-2xl border overflow-hidden animate-fade-up delay-300"
-      style={{ backgroundColor: 'white', borderColor: '#E5E5E5', maxWidth: 520 }}
-    >
-      <div className="p-6 pb-4">
-        <p className="text-[0.6rem] font-semibold uppercase tracking-[0.15em] mb-4" style={{ color: '#86868B' }}>
-          Example Scan
-        </p>
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-lg font-extrabold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
-              Polyester Hoodie
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>Material: Polyester</p>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              <span className="category-badge cat-petro">Petro-Based</span>
-              <span className="risk-badge risk-high" style={{ padding: '3px 10px', fontSize: '0.65rem' }}>High Petro-Risk</span>
-            </div>
+    <div data-testid={`risk-signal-${label.toLowerCase().replace(/\s+/g, '-')}`} className="flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-medium" style={{ color: '#1D1D1F' }}>{label}</span>
+          <span className="text-xs font-bold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color }}>{value}</span>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, backgroundColor: color }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Comparison Block with bullets ──────── */
+function ComparisonBlock({ query, result }) {
+  const currentLevel = getPetroloadLevel(result.petroloadScore);
+  const bestAlt = result.alternatives?.[0];
+  if (!bestAlt) return null;
+
+  const altPetro = bestAlt.materialClass === "Plant-Based" ? 12
+    : bestAlt.materialClass === "Natural Material" ? 15
+    : bestAlt.materialClass === "Transition Material" ? 35 : 20;
+  const altLevel = getPetroloadLevel(altPetro);
+
+  const isPetro = (result.materialClass || "").toLowerCase().includes("petro");
+  const currentBullets = isPetro
+    ? ["Fossil-derived synthetic fiber", "High petrochemical dependence", "High microplastic shedding risk"]
+    : ["Partially processed material", "Moderate petrochemical input", "Environmental impact varies"];
+
+  const altBullets = [
+    `${bestAlt.materialClass || "Plant-based"} fiber system`,
+    "Lower petrochemical dependence",
+    "Lower synthetic microplastic risk",
+    "More biodegradable",
+  ];
+
+  return (
+    <div data-testid="comparison-card" className="bg-white rounded-2xl border overflow-hidden animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+      <p className="px-6 pt-5 pb-0 text-[0.6rem] font-semibold uppercase tracking-[0.12em]" style={{ color: '#86868B' }}>
+        This Product vs Better Option
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 relative">
+        {/* Current product */}
+        <div className="p-6" style={{ backgroundColor: `${currentLevel.color}04` }}>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-2" style={{ color: currentLevel.color }}>This Product</p>
+          <p className="text-base font-extrabold mb-1" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+            {query.charAt(0).toUpperCase() + query.slice(1)}
+          </p>
+          <div className="flex items-baseline gap-1.5 mb-3">
+            <span className="text-3xl font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: currentLevel.color }}>
+              {result.petroloadScore ?? "—"}
+            </span>
+            <span className="text-[0.65rem] font-medium" style={{ color: '#86868B' }}>Petroload</span>
           </div>
-          <div className="text-right ml-4">
-            <p className="text-[2.75rem] font-extrabold tabular-nums leading-none" style={{ fontFamily: "'Manrope', sans-serif", color: level.color }}>
-              95
+          <ul className="space-y-1.5">
+            {currentBullets.map((b, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#4B5563' }}>
+                <span className="inline-block w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: currentLevel.color }} />
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Center arrow (desktop) */}
+        <div className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white border shadow-sm z-10" style={{ borderColor: '#E5E5E5' }}>
+          <ArrowRight className="w-3.5 h-3.5" style={{ color: '#22C55E' }} />
+        </div>
+        {/* Center arrow (mobile) */}
+        <div className="md:hidden flex justify-center -my-3 relative z-10">
+          <div className="w-7 h-7 rounded-full bg-white border shadow-sm flex items-center justify-center" style={{ borderColor: '#E5E5E5' }}>
+            <ArrowDown className="w-3 h-3" style={{ color: '#22C55E' }} />
+          </div>
+        </div>
+
+        {/* Better option */}
+        <div className="p-6" style={{ backgroundColor: `${altLevel.color}04` }}>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-2" style={{ color: '#22C55E' }}>Better Option</p>
+          <p className="text-base font-extrabold mb-1" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+            {bestAlt.name} {query.split(' ').slice(-1)[0]}
+          </p>
+          <div className="flex items-baseline gap-1.5 mb-3">
+            <span className="text-3xl font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: altLevel.color }}>
+              {altPetro}
+            </span>
+            <span className="text-[0.65rem] font-medium" style={{ color: '#86868B' }}>Petroload</span>
+          </div>
+          <ul className="space-y-1.5">
+            {altBullets.map((b, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#4B5563' }}>
+                <span className="inline-block w-1 h-1 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: '#22C55E' }} />
+                {b}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Placeholder Product Card ───────────── */
+function PlaceholderProductCard({ title, material, petroload }) {
+  const level = getPetroloadLevel(petroload);
+  return (
+    <div className="card-lift rounded-xl border p-5" style={{ borderColor: '#E5E5E5' }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="px-2 py-0.5 rounded-full text-[0.6rem] font-semibold" style={{ backgroundColor: `${level.color}12`, color: level.color }}>
+          Petroload {petroload}
+        </span>
+        <Leaf className="w-3.5 h-3.5" style={{ color: '#22C55E' }} />
+      </div>
+      <p className="text-sm font-bold mb-0.5" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>{title}</p>
+      <p className="text-xs" style={{ color: '#86868B' }}>Made with {material}</p>
+    </div>
+  );
+}
+
+/* ─── Live Product Card ──────────────────── */
+function LiveProductCard({ product }) {
+  const level = getPetroloadLevel(product.petroloadScore);
+  return (
+    <div data-testid={`product-card-${product.productId}`} className="card-lift rounded-xl border p-5" style={{ borderColor: '#E5E5E5' }}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="px-2 py-0.5 rounded-full text-[0.6rem] font-semibold" style={{ backgroundColor: `${level.color}12`, color: level.color }}>
+          Petroload {product.petroloadScore ?? '—'}%
+        </span>
+        {product.isFiberFoundry && <Star className="w-3.5 h-3.5" style={{ color: '#B45309' }} />}
+      </div>
+      <p className="text-sm font-bold mb-0.5" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>{product.title}</p>
+      <p className="text-xs mb-1" style={{ color: '#86868B' }}>{product.brand}{product.alternativeMaterial ? ` - ${product.alternativeMaterial}` : ''}</p>
+      {product.transparencyScore != null && (
+        <p className="text-[0.65rem] mt-2" style={{ color: '#22C55E' }}>
+          Transparency {Math.round(product.transparencyScore)}%{product.transparencyGrade ? ` (${product.transparencyGrade})` : ''}
+        </p>
+      )}
+      {product.purchaseUrl && (
+        <a href={product.purchaseUrl} target="_blank" rel="noopener noreferrer" data-testid={`buy-link-${product.productId}`}
+          className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium" style={{ color: '#B45309' }}>
+          View Product <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+/* ─── How BioLens Scored This (expandable) ── */
+function ScoringExplainer({ result }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="scoring-explainer" className="bg-white rounded-2xl border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+      <button
+        data-testid="scoring-explainer-toggle"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between p-6 text-left"
+      >
+        <h3 className="text-sm font-bold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+          How BioLens Scored This
+        </h3>
+        {open ? <ChevronUp className="w-4 h-4" style={{ color: '#86868B' }} /> : <ChevronDown className="w-4 h-4" style={{ color: '#86868B' }} />}
+      </button>
+      {open && (
+        <div className="px-6 pb-6 space-y-4" style={{ borderTop: '1px solid #F3F4F6' }}>
+          <div className="pt-4">
+            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Material Match</p>
+            <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+              BioLens identifies the primary material in your product by matching it against our database of {'>'}120 classified materials and their known aliases.
             </p>
-            <p className="text-[0.55rem] font-semibold uppercase tracking-[0.12em] mt-0.5" style={{ color: level.color }}>
-              Petroload
+          </div>
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Petrochemical Dependency</p>
+            <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+              The Petroload score (0-100) estimates how dependent a material is on petroleum-derived feedstocks, processing chemicals, and fossil fuel energy inputs.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Product Category Weighting</p>
+            <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+              Scores are adjusted based on the product category. Apparel, home textiles, and industrial materials are weighted differently based on typical material blends and processing requirements.
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold mb-1" style={{ color: '#1D1D1F' }}>Replacement Pathway</p>
+            <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+              Alternatives are suggested based on functional equivalence. We recommend materials that can serve the same purpose with lower petrochemical dependence.
+              {result?.materialName === "Bamboo Viscose" && " Note: Bamboo apparel is treated as semi-synthetic unless verified mechanically processed."}
             </p>
           </div>
         </div>
-      </div>
-      <div className="px-6 py-3" style={{ backgroundColor: 'rgba(34,197,94,0.04)', borderTop: '1px solid #F3F4F6' }}>
-        <p className="text-xs" style={{ color: '#86868B' }}>
-          Better Option: <span style={{ color: '#22C55E', fontWeight: 700 }}>Hemp</span>
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* ── Trust Counter ── */
-function TrustCounter({ label, value, icon }) {
-  return (
-    <div data-testid={`trust-stat-${label.toLowerCase().replace(/\s+/g, '-')}`} className="flex items-center gap-3">
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#F3F4F6', color: '#86868B' }}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-base font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
-          {value}
-        </p>
-        <p className="text-[0.6rem] font-medium uppercase tracking-wider" style={{ color: '#86868B' }}>
-          {label}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-export default function HomePage() {
-  const navigate = useNavigate();
-  const [showScanner, setShowScanner] = useState(false);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [recentSearches, setRecentSearches] = useState([]);
-  const [globalImpact, setGlobalImpact] = useState(null);
-
-  useEffect(() => {
-    setHistory(getScanHistory());
-    setRecentSearches(getRecentSearches());
-    fetchGlobalImpact().then(data => { if (data) setGlobalImpact(data); }).catch(() => {});
-  }, []);
-
-  const handleClearHistory = () => {
-    clearScanHistory();
-    setHistory([]);
-  };
-
-  const handleSearch = (term) => {
-    addRecentSearch(term);
-    navigate(`/results?q=${encodeURIComponent(term)}`);
-  };
-
-  const handleBarcodeScan = async (barcode) => {
-  console.log("📸 Scanned barcode:", barcode);
-  setShowScanner(false);
-  setScanLoading(true);
-  
-  try {
-    // ✅ Use FREE Open Beauty Facts / Open Food Facts lookup
-    const result = await lookupProductByBarcode(barcode);
-    
-    if (result.success) {
-      console.log("✅ Product found:", result.product.name);
-      
-      // Log company info if available
-      if (result.companyInfo) {
-        console.log("🏢 Company:", result.companyInfo.name, "-", result.companyInfo.sector);
-      }
-      
-      // Add to recent searches
-      addRecentSearch(result.product.name);
-      
-      // Navigate with both product name and barcode
-      navigate(`/results?q=${encodeURIComponent(result.product.name)}&barcode=${encodeURIComponent(barcode)}`);
-    } else {
-      // Product not found - navigate with barcode as fallback
-      console.log("❌ Not found:", result.message);
-      navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
-    }
-  } catch (error) {
-    console.error("💥 Barcode lookup error:", error);
-    // Fallback: navigate with barcode
-    navigate(`/results?q=${encodeURIComponent(barcode)}&barcode=${encodeURIComponent(barcode)}`);
-  } finally {
-    setScanLoading(false);
-  }
-};
-
-  return (
-    <div data-testid="home-page">
-      {showScanner && (
-        <BarcodeScanner onScan={handleBarcodeScan} onClose={() => setShowScanner(false)} />
       )}
+    </div>
+  );
+}
 
-      {/* ── Hero ── */}
-      <section data-testid="hero-section" className="pt-28 pb-10 md:pt-36 md:pb-14 px-6 md:px-12 lg:px-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="max-w-2xl">
-            <h1
-              className="text-[2.8rem] md:text-[3.5rem] font-extrabold leading-[1.08] tracking-tight animate-fade-up"
-              style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}
-            >
-              See what your products are{" "}
-              <span style={{ color: '#B45309' }}>really</span> made of.
-            </h1>
+/* ════════════════════════════════════════════ */
+/* ─── Main Results Page ──────────────────── */
+/* ════════════════════════════════════════════ */
+export default function ResultsPage() {
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get("q") || "";
+  const barcode = searchParams.get("barcode") || ""; // ✅ ADDED: Get barcode from URL
+  const navigate = useNavigate();
 
-            <p className="mt-4 text-base leading-relaxed animate-fade-up delay-100" style={{ color: '#6B7280', maxWidth: 480 }}>
-              Search or scan everyday products to uncover petrochemical dependency, material classification, and better alternatives.
-            </p>
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showShare, setShowShare] = useState(false);
+  const [altProducts, setAltProducts] = useState([]);
+  const [altLoading, setAltLoading] = useState(false);
+  const [productSources, setProductSources] = useState({});
+  const [scannedProductData, setScannedProductData] = useState(null); // ✅ ADDED: Store barcode results
 
-            <div className="mt-8 animate-fade-up delay-200">
-              <SearchBar size="large" />
-            </div>
+  // ✅ FIXED: useEffect now handles both query AND barcode
+  useEffect(() => {
+    if (!query && !barcode) return;
+    
+    const fetchResult = async () => {
+      setLoading(true);
+      setError(null);
+      setResult(null);
+      setAltProducts([]);
+      setProductSources({});
+      setScannedProductData(null);
 
-            <div className="mt-3 flex flex-wrap items-center gap-2 animate-fade-up delay-300">
-              <button
-                data-testid="scan-product-button"
-                onClick={() => setShowScanner(true)}
-                disabled={scanLoading}
-                className="btn-pill btn-accent flex items-center gap-2"
-                style={{ padding: '10px 24px', fontSize: '0.8rem' }}
-              >
-                <ScanBarcode className="w-4 h-4" />
-                {scanLoading ? "Looking up..." : "Scan Product"}
+      let effectiveQuery = query;
+      let productData = null;
+
+      try {
+        // ✅ ADDED: Handle barcode lookup first if barcode parameter exists
+        if (barcode && !query) {
+          console.log('🔍 Processing barcode parameter:', barcode);
+          const barcodeResult = await lookupProductByBarcode(barcode);
+          
+          if (barcodeResult.success) {
+            productData = barcodeResult;
+            setScannedProductData(barcodeResult);
+            effectiveQuery = barcodeResult.product.name;
+            console.log('✅ Product resolved:', barcodeResult.product.name);
+            if (barcodeResult.companyInfo) {
+              console.log('🏢 Company:', barcodeResult.companyInfo.name, '-', barcodeResult.companyInfo.sector);
+            }
+          } else {
+            setError(barcodeResult.message || "Product not found via barcode.");
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Run material analysis on the effective query
+        if (effectiveQuery) {
+          const data = await searchBioLens(effectiveQuery);
+          setResult(data);
+          
+          if (data) {
+            saveScanToHistory(effectiveQuery, data);
+            setAltLoading(true);
+            try {
+              const products = await fetchAlternativeProducts(effectiveQuery, 6);
+              setAltProducts(products);
+              const nonFf = products.filter(p => !p.isFiberFoundry);
+              if (nonFf.length > 0) {
+                const srcResults = await Promise.all(nonFf.map(p => fetchProductSources(p.productId).then(s => [p.productId, s])));
+                const srcMap = {};
+                for (const [pid, srcs] of srcResults) { srcMap[pid] = srcs; }
+                setProductSources(srcMap);
+              }
+            } catch (e) { 
+              console.error("Alt products fetch failed:", e); 
+            } finally { 
+              setAltLoading(false); 
+            }
+          }
+        }
+      } catch (err) {
+        setError(err.message || "Something went wrong.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchResult();
+  }, [query, barcode]); // ✅ FIXED: Added barcode dependency
+
+  if (!query && !barcode) {
+    return (
+      <div className="pt-32 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
+        <div className="max-w-3xl mx-auto text-center">
+          <h1 className="text-3xl md:text-4xl font-extrabold mb-4" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+            Search for a product
+          </h1>
+          <p className="mb-8 text-sm" style={{ color: '#86868B' }}>
+            Enter a product name to see its material classification and petroload.
+          </p>
+          <div className="flex justify-center"><SearchBar size="large" autoFocus /></div>
+        </div>
+      </div>
+    );
+  }
+
+  const riskConfig = result ? getRiskConfig(result.riskLevel) : null;
+  const RiskIcon = result ? (RISK_ICONS[result.riskLevel] || ShieldCheck) : ShieldCheck;
+  const categoryClass = result ? getCategoryClass(result.materialClass) : "cat-mixed";
+  const confidenceLabel = result ? getConfidenceLabel(result.confidenceScore) : "";
+
+  const ffProducts = altProducts.filter(p => p.isFiberFoundry);
+  const externalProducts = altProducts.filter(p => !p.isFiberFoundry);
+  const hasLiveProducts = ffProducts.length > 0 || externalProducts.length > 0;
+  const displayProducts = ffProducts.length > 0 ? ffProducts : externalProducts.slice(0, 3);
+
+  const riskSignals = result ? [
+    { label: "Pesticide Risk", value: result.pesticideRisk, color: '#EF4444' },
+    { label: "Synthetic Fertilizer", value: result.syntheticFertilizerRisk, color: '#F97316' },
+    { label: "Processing Chemicals", value: result.processingChemicalRisk, color: '#B45309' },
+    { label: "Herbicide Risk", value: result.herbicideRisk, color: '#9333EA' },
+  ].filter(s => s.value != null) : [];
+
+  // Supporting metrics
+  const petroDep = result?.petroloadScore ?? null;
+  const microplasticRisk = result?.petroloadScore != null ? Math.min(100, Math.round(result.petroloadScore * 0.85)) : null;
+  const bioReplacement = result?.petroloadScore != null ? Math.max(0, 100 - result.petroloadScore) : null;
+
+  // Common concerns text
+  const commonConcerns = result ? (() => {
+    const cls = (result.materialClass || "").toLowerCase();
+    if (cls.includes("petro")) return "Petroleum-derived materials depend on finite fossil fuel reserves, contribute to microplastic pollution through washing and wear, and persist in the environment for hundreds of years.";
+    if (cls.includes("transition")) return "Semi-synthetic materials start from natural sources but undergo significant chemical processing. Environmental impact depends heavily on manufacturing practices.";
+    if (cls.includes("plant") || cls.includes("natural")) return "While plant-based and natural materials have lower petrochemical dependency, they may still involve pesticides, water usage, or processing chemicals depending on cultivation methods.";
+    return "Material impact varies based on sourcing, processing, and end-of-life disposal methods.";
+  })() : "";
+
+  // Placeholder product examples from alternatives
+  const placeholderProducts = (result?.alternatives || []).slice(0, 3).map((alt, i) => ({
+    title: `${alt.name} ${query.split(' ').slice(-1)[0] || 'Product'}`,
+    material: alt.name,
+    petroload: alt.materialClass === "Plant-Based" ? 10 + i * 2
+      : alt.materialClass === "Natural Material" ? 12 + i * 3
+      : 25 + i * 5,
+  }));
+
+  // ✅ UPDATED: Use scanned product name if available
+  const productDisplayName = scannedProductData?.product?.name || 
+                            (query ? query.charAt(0).toUpperCase() + query.slice(1) : 'Unknown Product');
+  const materialClassification = result?.materialName || "";
+  const companyInfo = scannedProductData?.companyInfo; // ✅ ADDED
+
+  return (
+    <div data-testid="results-page" className="pt-28 pb-24 px-6 md:px-12 lg:px-24 min-h-screen">
+      <div className="max-w-3xl mx-auto">
+
+        {/* Back + search */}
+        <div className="mb-8 animate-fade-up">
+          <button data-testid="back-button" onClick={() => navigate("/")}
+            className="flex items-center gap-2 text-xs font-medium mb-5 transition-colors duration-200"
+            style={{ color: '#86868B' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#1D1D1F'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#86868B'}
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to search
+          </button>
+          <SearchBar size="small" initialQuery={query} />
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div data-testid="loading-state" className="mt-16 text-center">
+            <div className="inline-block w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#E5E5E5', borderTopColor: '#B45309' }} />
+            <p className="mt-4 text-xs" style={{ color: '#86868B' }}>Analyzing product...</p>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && !loading && (
+          <div data-testid="error-state" className="mt-16 text-center">
+            <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: '#EF4444' }} />
+            <p className="text-sm" style={{ color: '#EF4444' }}>{error}</p>
+            <button onClick={() => navigate("/")} className="btn-pill btn-secondary mt-6">Try another search</button>
+          </div>
+        )}
+
+        {/* Not found */}
+        {!result && !loading && !error && (query || barcode) && (
+          <div data-testid="not-found-state" className="mt-16 animate-fade-up">
+            <div className="bg-white rounded-2xl p-8 md:p-10 border text-center" style={{ borderColor: '#E5E5E5' }}>
+              <AlertCircle className="w-10 h-10 mx-auto mb-4" style={{ color: '#86868B' }} />
+              <h2 className="text-xl font-bold mb-3" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Material not recognized</h2>
+              <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: '#86868B' }}>
+                We couldn't identify the primary material for "<strong style={{ color: '#1D1D1F' }}>{productDisplayName}</strong>".
+              </p>
+              <button data-testid="explore-materials-fallback" onClick={() => navigate("/explore")} className="btn-pill btn-secondary">
+                Browse Materials <ArrowRight className="w-4 h-4 ml-1" />
               </button>
             </div>
+          </div>
+        )}
 
-            {/* Example chips */}
-            <div className="mt-4 flex flex-wrap gap-1.5 animate-fade-up delay-400">
-              <span className="text-[0.65rem] font-medium mr-0.5 self-center" style={{ color: '#86868B' }}>Try:</span>
-              {EXAMPLE_SEARCHES.map((term) => (
-                <button
-                  key={term}
-                  data-testid={`example-search-${term.replace(/\s+/g, '-')}`}
-                  onClick={() => handleSearch(term)}
-                  className="px-2.5 py-0.5 rounded-full text-[0.65rem] font-medium transition-all duration-200 border"
-                  style={{ backgroundColor: 'white', color: '#1D1D1F', borderColor: '#E5E5E5' }}
-                  onMouseEnter={(e) => { e.target.style.borderColor = '#B45309'; e.target.style.color = '#B45309'; }}
-                  onMouseLeave={(e) => { e.target.style.borderColor = '#E5E5E5'; e.target.style.color = '#1D1D1F'; }}
+        {/* ════════════════ RESULT ════════════════ */}
+        {result && !loading && (
+          <div data-testid="result-found" className="mt-2 space-y-5">
+
+            {/* ── S1: Product Scanned ── */}
+            <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+              <div className="flex items-start justify-between mb-1">
+                <div>
+                  <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1.5" style={{ color: '#86868B' }}>
+                    {barcode ? 'Scanned Product' : 'Product Searched'}
+                  </p>
+                  <h2 data-testid="result-product-name" className="text-xl md:text-2xl font-extrabold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+                    {productDisplayName}
+                  </h2>
+                  
+                  {/* ✅ NEW: Show company info from barcode */}
+                  {companyInfo && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs px-2 py-1 rounded-full font-medium" 
+                            style={{ backgroundColor: 'rgba(180, 83, 9, 0.1)', color: '#B45309' }}>
+                        {companyInfo.name}
+                      </span>
+                      <span className="text-xs" style={{ color: '#86868B' }}>
+                        {companyInfo.sector}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Separate material classification */}
+                  {materialClassification && materialClassification.toLowerCase() !== productDisplayName.toLowerCase() && (
+                    <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>
+                      Material Classification: <span style={{ color: '#1D1D1F', fontWeight: 600 }}>{materialClassification}</span>
+                    </p>
+                  )}
+                </div>
+                <button data-testid="share-scan-button" onClick={() => setShowShare(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.65rem] font-medium border transition-colors duration-200"
+                  style={{ color: '#1D1D1F', borderColor: '#E5E5E5', flexShrink: 0 }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#B45309'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#E5E5E5'}
                 >
-                  {term}
+                  <Share2 className="w-3 h-3" /> Share
                 </button>
-              ))}
+              </div>
+
+              {/* ✅ Show barcode info */}
+              {barcode && (
+                <div className="flex items-center gap-2 mb-2">
+                  <ScanBarcode className="w-3 h-3" style={{ color: '#86868B' }} />
+                  <span className="text-[0.65rem]" style={{ color: '#86868B' }}>
+                    Barcode: {barcode}
+                    {scannedProductData?.source && (
+                      <span className="ml-2 text-green-600">• {scannedProductData.source}</span>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <span data-testid="result-category-badge" className={`category-badge ${categoryClass}`}>{result.materialClass}</span>
+                {riskConfig && (
+                  <span data-testid="result-risk-badge" className={`risk-badge ${riskConfig.className}`} style={{ padding: '4px 12px', fontSize: '0.7rem' }}>
+                    <RiskIcon className="w-3.5 h-3.5" /> {riskConfig.label}
+                  </span>
+                )}
+                <span data-testid="result-confidence-badge" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[0.65rem] font-medium"
+                  style={{ backgroundColor: confidenceLabel === "High Confidence" ? 'rgba(34,197,94,0.08)' : '#F3F4F6', color: confidenceLabel === "High Confidence" ? '#22C55E' : '#86868B' }}
+                >
+                  {confidenceLabel === "High Confidence" || confidenceLabel === "Moderate Confidence" ? <CheckCircle2 className="w-3 h-3" /> : <HelpCircle className="w-3 h-3" />}
+                  {confidenceLabel}
+                </span>
+              </div>
             </div>
 
-            {/* Recent Searches */}
-            {recentSearches.length > 0 && (
-              <div className="mt-4 animate-fade-up delay-500">
-                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1.5" style={{ color: '#86868B' }}>Recent Searches</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {recentSearches.map((term) => (
-                    <button
-                      key={term}
-                      data-testid={`recent-search-${term.replace(/\s+/g, '-')}`}
-                      onClick={() => handleSearch(term)}
-                      className="px-2.5 py-0.5 rounded-full text-[0.65rem] font-medium transition-all duration-200 border flex items-center gap-1"
-                      style={{ backgroundColor: '#F9FAFB', color: '#6B7280', borderColor: '#F3F4F6' }}
-                      onMouseEnter={(e) => { e.target.style.color = '#1D1D1F'; }}
-                      onMouseLeave={(e) => { e.target.style.color = '#6B7280'; }}
+            {/* Rest of your existing sections remain exactly the same... */}
+            {/* ── S2: Petroload Score Panel ── */}
+            <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up delay-100" style={{ borderColor: '#E5E5E5' }}>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-4" style={{ color: '#86868B' }}>Petroload Score</p>
+              <div className="flex justify-center mb-2">
+                <PetroloadMeter score={result.petroloadScore} size="large" />
+              </div>
+              <p className="text-xs text-center font-medium mb-6" style={{ color: '#86868B' }}>
+                {result.petroloadScore != null && result.petroloadScore >= 75 ? 'Very High Petrochemical Dependence'
+                  : result.petroloadScore >= 50 ? 'High Petrochemical Dependence'
+                  : result.petroloadScore >= 25 ? 'Moderate Petrochemical Dependence'
+                  : 'Low Petrochemical Dependence'}
+              </p>
+
+              {/* 3 supporting metrics */}
+              <div className="grid grid-cols-3 gap-4 pt-5" style={{ borderTop: '1px solid #F3F4F6' }}>
+                {[
+                  { label: "Petro Dependence", value: petroDep, icon: <Zap className="w-3.5 h-3.5" />, color: '#EF4444' },
+                  { label: "Microplastic Risk", value: microplasticRisk, icon: <Droplets className="w-3.5 h-3.5" />, color: '#F97316' },
+                  { label: "Bio-Replacement", value: bioReplacement, icon: <Recycle className="w-3.5 h-3.5" />, color: '#22C55E' },
+                ].map((m) => m.value != null && (
+                  <div key={m.label} data-testid={`metric-${m.label.toLowerCase().replace(/\s+/g, '-')}`} className="text-center">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto mb-1.5" style={{ backgroundColor: `${m.color}10`, color: m.color }}>
+                      {m.icon}
+                    </div>
+                    <p className="text-lg font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: m.color }}>
+                      {m.value}
+                    </p>
+                    <p className="text-[0.55rem] font-medium uppercase tracking-wider mt-0.5" style={{ color: '#86868B' }}>{m.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── S3: Material DNA ── */}
+            <div data-testid="material-dna-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up delay-200" style={{ borderColor: '#E5E5E5' }}>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-5" style={{ color: '#86868B' }}>Material DNA</p>
+              <MaterialDNA result={result} />
+            </div>
+
+            {/* ── S4: Comparison Block ── */}
+            {result.alternatives && result.alternatives.length > 0 && (
+              <ComparisonBlock query={productDisplayName} result={result} />
+            )}
+
+            {/* ── S5: Material Analysis ── */}
+            <div className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Material Identified</p>
+              <h3 data-testid="result-material-name" className="text-lg font-extrabold mb-2" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
+                {result.materialName}
+              </h3>
+
+              <div className="mb-4">
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Why It Matters</p>
+                <p data-testid="result-explanation" className="text-sm leading-relaxed" style={{ color: '#4B5563' }}>
+                  {result.explanation}
+                </p>
+              </div>
+
+              {commonConcerns && (
+                <div className="mb-4">
+                  <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Common Concerns</p>
+                  <p className="text-xs leading-relaxed" style={{ color: '#6B7280' }}>
+                    {commonConcerns}
+                  </p>
+                </div>
+              )}
+
+              {/* Health Score */}
+              {result.healthScore != null && (
+                <div className="mb-5 pb-5" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium" style={{ color: '#86868B' }}>Material Health Score</span>
+                    <span data-testid="health-score-value" className="text-sm font-bold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: result.healthScore >= 60 ? '#22C55E' : result.healthScore >= 40 ? '#EAB308' : '#EF4444' }}>
+                      {result.healthScore}/100
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
+                    <div data-testid="health-score-bar" className="h-full rounded-full" style={{ width: `${result.healthScore}%`, backgroundColor: result.healthScore >= 60 ? '#22C55E' : result.healthScore >= 40 ? '#EAB308' : '#EF4444', transition: 'width 0.8s ease' }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Risk Signals */}
+              {riskSignals.length > 0 && (
+                <div data-testid="risk-signals-section">
+                  <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-3" style={{ color: '#86868B' }}>Risk Signals</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {riskSignals.map(s => <RiskSignalBar key={s.label} {...s} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── S6: Better Material Paths ── */}
+            {result.alternatives && result.alternatives.length > 0 && (
+              <div data-testid="alternatives-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>
+                  Replace {result.materialName} With
+                </p>
+                <div className="flex items-center gap-2 mb-5">
+                  <Leaf className="w-4 h-4" style={{ color: '#22C55E' }} />
+                  <h3 className="text-base font-bold" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Better Material Paths</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {result.alternatives.slice(0, 3).map((alt, idx) => (
+                    <div key={`${alt.name}-${idx}`} data-testid={`alternative-${alt.name.toLowerCase().replace(/\s+/g, '-')}`}
+                      className="card-lift rounded-xl p-4 border" style={{ borderColor: '#E5E5E5' }}
                     >
-                      <Search className="w-2.5 h-2.5" />
-                      {term}
-                    </button>
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-bold text-sm" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>{alt.name}</p>
+                          {alt.materialClass && <p className="text-[0.65rem] mt-0.5" style={{ color: '#22C55E' }}>{alt.materialClass}</p>}
+                          {alt.reason && <p className="text-xs mt-1.5 leading-relaxed" style={{ color: '#86868B' }}>{alt.reason}</p>}
+                        </div>
+                        <Leaf className="w-3.5 h-3.5 flex-shrink-0 ml-2" style={{ color: '#22C55E' }} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Example Scan Card */}
-            <ExampleScanCard />
-          </div>
-        </div>
-      </section>
+            {/* ── Better Product Examples ── */}
+            <div data-testid="where-to-buy-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-1" style={{ color: '#86868B' }}>Curated Examples</p>
+              <h3 className="text-base font-bold mb-5" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>Better Product Examples</h3>
 
-      {/* ── Trust Counters ── */}
-      <section data-testid="trust-counters-section" className="py-8 md:py-12 px-6 md:px-12 lg:px-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="rounded-xl border p-5 md:p-7" style={{ backgroundColor: 'white', borderColor: '#E5E5E5' }}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <TrustCounter label="Products Analyzed" value="2,300+" icon={<BarChart3 className="w-4 h-4" />} />
-              <TrustCounter label="Materials Mapped" value="120+" icon={<Layers className="w-4 h-4" />} />
-              <TrustCounter label="High Petro-Risk Flags" value="1,640+" icon={<Flag className="w-4 h-4" />} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Scan History ── */}
-      {history.length > 0 && (
-        <section data-testid="scan-history-section" className="pb-6 px-6 md:px-12 lg:px-24">
-          <div className="max-w-5xl mx-auto">
-            <ScanHistory history={history} onClear={handleClearHistory} />
-          </div>
-        </section>
-      )}
-
-      {/* ── How BioLens Works Strip ── */}
-      <section data-testid="how-strip-section" className="py-14 md:py-20 px-6 md:px-12 lg:px-24">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-center mb-8" style={{ color: '#86868B' }}>
-            How BioLens Works
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {[
-              { num: "1", title: "Search or Scan", desc: "Enter a product name or scan its barcode", icon: <Scan className="w-5 h-5" /> },
-              { num: "2", title: "Identify Material", desc: "We detect the likely material composition", icon: <Layers className="w-5 h-5" /> },
-              { num: "3", title: "Score Dependence", desc: "Petrochemical dependency scored 0-100", icon: <AlertTriangle className="w-5 h-5" /> },
-              { num: "4", title: "Better Alternatives", desc: "We suggest lower-impact materials", icon: <Leaf className="w-5 h-5" /> },
-            ].map((step) => (
-              <div key={step.num} className="text-center animate-fade-up" style={{ animationDelay: `${Number(step.num) * 0.1}s` }}>
-                <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-3"
-                  style={{ backgroundColor: '#F3F4F6', color: '#B45309' }}
-                >
-                  {step.icon}
+              {altLoading ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: '#E5E5E5', borderTopColor: '#B45309' }} />
                 </div>
-                <p className="text-sm font-bold mb-1" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>{step.title}</p>
-                <p className="text-xs leading-relaxed" style={{ color: '#86868B' }}>{step.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Global Impact from Supabase ── */}
-      {globalImpact && (globalImpact.scans_total > 0 || globalImpact.purchases_total > 0) && (
-        <section data-testid="global-impact-section" className="pb-8 px-6 md:px-12 lg:px-24">
-          <div className="max-w-5xl mx-auto">
-            <div className="rounded-xl border p-5 md:p-7 text-center" style={{ backgroundColor: 'white', borderColor: '#E5E5E5' }}>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] mb-4" style={{ color: '#86868B' }}>
-                Live Community Impact
-              </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {[
-                  { label: "Scans", value: globalImpact.scans_total || 0 },
-                  { label: "Purchases", value: globalImpact.purchases_total || 0 },
-                  { label: "Petro $ Replaced", value: globalImpact.petro_dollars_replaced != null ? `$${Number(globalImpact.petro_dollars_replaced).toLocaleString()}` : "$0" },
-                  { label: "Microplastic Avoided", value: globalImpact.microplastic_avoidance_units || 0 },
-                ].map((s) => (
-                  <div key={s.label}>
-                    <p className="text-xl font-extrabold tabular-nums" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>
-                      {typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
-                    </p>
-                    <p className="text-[0.55rem] font-medium uppercase tracking-wider mt-0.5" style={{ color: '#86868B' }}>{s.label}</p>
+              ) : hasLiveProducts ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {displayProducts.map(p => <LiveProductCard key={p.productId} product={p} />)}
                   </div>
-                ))}
-              </div>
+                  <p className="mt-4 text-[0.65rem] text-center" style={{ color: '#86868B' }}>
+                    Available on FiberFoundry (coming soon)
+                  </p>
+                </>
+              ) : placeholderProducts.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {placeholderProducts.map((p, i) => <PlaceholderProductCard key={i} {...p} />)}
+                  </div>
+                  <p className="mt-4 text-[0.65rem] text-center" style={{ color: '#86868B' }}>
+                    Available on FiberFoundry (coming soon)
+                  </p>
+                </>
+              ) : null}
             </div>
-          </div>
-        </section>
-      )}
 
-      {/* ── CTA ── */}
-      <section data-testid="cta-section" className="py-14 md:py-20 px-6 md:px-12 lg:px-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="rounded-2xl p-10 md:p-14 text-center" style={{ backgroundColor: '#1D1D1F' }}>
-            <h2 className="text-2xl md:text-3xl font-extrabold mb-3 animate-fade-up" style={{ fontFamily: "'Manrope', sans-serif", color: '#F5F5F7' }}>
-              Explore the materials around you
-            </h2>
-            <p className="text-sm mb-6 animate-fade-up delay-100 max-w-md mx-auto" style={{ color: '#86868B' }}>
-              Browse our growing library of materials and learn what makes each one unique.
-            </p>
-            <button data-testid="cta-explore-materials" onClick={() => navigate("/explore")} className="btn-pill btn-accent animate-fade-up delay-200" style={{ padding: '10px 28px', fontSize: '0.8rem' }}>
-              Explore Materials <ArrowRight className="w-4 h-4 ml-1" />
-            </button>
-          </div>
-        </div>
-      </section>
+            {/* ── S7: How BioLens Scored This ── */}
+            <ScoringExplainer result={result} />
 
-      {/* ── Floating mobile scan button ── */}
-      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        <button
-          data-testid="floating-scan-button"
-          onClick={() => setShowScanner(true)}
-          disabled={scanLoading}
-          className="flex items-center gap-2 px-6 py-3.5 rounded-full shadow-xl text-sm font-semibold transition-transform duration-200 active:scale-95"
-          style={{ backgroundColor: '#B45309', color: 'white', fontFamily: "'Manrope', sans-serif" }}
-        >
-          <ScanBarcode className="w-4.5 h-4.5" />
-          Scan Product
-        </button>
+            {/* Purchase Impact */}
+            <PurchaseImpact result={result} />
+
+            {/* No alternatives — good material */}
+            {result.alternatives && result.alternatives.length === 0 && (
+              <div data-testid="no-alternatives-section" className="bg-white rounded-2xl p-6 md:p-8 border animate-fade-up" style={{ borderColor: '#E5E5E5' }}>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: 'rgba(34,197,94,0.1)' }}>
+                    <ShieldCheck className="w-4.5 h-4.5" style={{ color: '#22C55E' }} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm" style={{ fontFamily: "'Manrope', sans-serif", color: '#1D1D1F' }}>This is already a great material choice</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#86868B' }}>{result.materialName} is a responsible material. Keep choosing products like this.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {showShare && result && <ShareCard result={result} query={productDisplayName} onClose={() => setShowShare(false)} />}
       </div>
     </div>
   );
