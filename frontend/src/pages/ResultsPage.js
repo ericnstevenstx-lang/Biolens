@@ -1,555 +1,1027 @@
-import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import {
-  ArrowLeft, AlertCircle, ShieldCheck, ShieldAlert, ShieldX,
-  Leaf, Share2, ScanBarcode, CheckCircle2, HelpCircle,
-  ChevronDown, ChevronUp, Droplets, Zap, Recycle, Building2,
-  Package, Globe, Flame, MapPin, Truck, FlaskConical, Info,
-  Sparkles, Box, ShoppingBag, Star
-} from "lucide-react";
-import SearchBar from "@/components/SearchBar";
-import PetroloadMeter from "@/components/PetroloadMeter";
-import ShareCard from "@/components/ShareCard";
-import PurchaseImpact from "@/components/PurchaseImpact";
-import MaterialDNA from "@/components/MaterialDNA";
-import {
-  searchBioLens,
-  getConfidenceLabel,
-  getCategoryClass,
-  getRiskConfig,
-  saveScanToHistory,
-  fetchAlternativeProducts,
-  fetchProductSources,
-  getPetroloadLevel,
-  lookupProductByBarcode,
-} from "@/lib/biolens";
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { scanBarcode, analyzeMaterial, analyzeTokens } from '../services/biolens';
+import './ResultsPage.css';
 
-const RISK_ICONS = { High: ShieldX, Medium: ShieldAlert, Low: ShieldCheck };
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Utility helpers
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
-const TIER_CONFIG = {
-  bio_pure:      { label: "Bio-Pure",      bg: "rgba(34,197,94,0.08)",  border: "#22C55E40", color: "#15803D" },
-  bridge:        { label: "Bridge",        bg: "rgba(234,179,8,0.08)",  border: "#EAB30840", color: "#A16207" },
-  petrochemical: { label: "Petrochemical", bg: "rgba(239,68,68,0.08)",  border: "#EF444440", color: "#B91C1C" },
-  unknown:       { label: "Unknown",       bg: "rgba(107,114,128,0.08)",border: "#6B728040", color: "#374151" },
-};
+function fmt(val, digits = 0) {
+  if (val == null) return 'â';
+  const n = parseFloat(val);
+  if (isNaN(n)) return 'â';
+  return n.toFixed(digits);
+}
 
-const EXPOSURE_CONFIG = {
-  high:     { color: "#EF4444", bg: "rgba(239,68,68,0.06)",   border: "#EF444440", label: "High Concern" },
-  moderate: { color: "#F59E0B", bg: "rgba(245,158,11,0.06)",  border: "#F59E0B40", label: "Moderate Concern" },
-  low:      { color: "#22C55E", bg: "rgba(34,197,94,0.06)",   border: "#22C55E40", label: "Low Concern" },
-  minimal:  { color: "#22C55E", bg: "rgba(34,197,94,0.06)",   border: "#22C55E40", label: "Minimal Concern" },
-  unknown:  { color: "#6B7280", bg: "rgba(107,114,128,0.06)", border: "#6B728040", label: "No Data" },
-};
+function fmtPct(val, digits = 0) {
+  if (val == null) return 'â';
+  const n = parseFloat(val);
+  if (isNaN(n)) return 'â';
+  return n.toFixed(digits) + '%';
+}
 
-const RESILIENCE_COLORS = { A: "#22C55E", B: "#84CC16", C: "#F59E0B", D: "#F97316", F: "#EF4444" };
+function fmtScore(val) {
+  if (val == null) return 'â';
+  return Math.round(parseFloat(val) * 100);
+}
 
-/* ── Collapsible section ──────────────────────────────────────── */
-function Section({ icon: Icon, title, children, defaultOpen = true }) {
-  const [open, setOpen] = useState(defaultOpen);
+// ISO alpha-2 â flag emoji
+function countryFlag(code) {
+  if (!code || code.length !== 2) return 'ð';
+  return code.toUpperCase().split('').map(c =>
+    String.fromCodePoint(0x1F1E6 - 65 + c.charCodeAt(0))
+  ).join('');
+}
+
+function tierClass(tier) {
+  const t = (tier || '').toLowerCase().replace(/[^a-z_]/g, '');
+  if (['bio_pure', 'plant_based', 'natural_material'].includes(t)) return 'bio_pure';
+  if (['bridge', 'transition_material'].includes(t)) return 'bridge';
+  if (['petrochemical', 'petro_based'].includes(t)) return 'petrochemical';
+  return 'unknown';
+}
+
+function tierLabel(tier) {
+  const map = {
+    bio_pure: 'Bio-Pure',
+    bridge: 'Bridge',
+    petrochemical: 'Petrochemical',
+    mineral: 'Mineral',
+    mixed: 'Mixed',
+    unknown: 'Unknown',
+  };
+  return map[tierClass(tier)] ?? tier ?? 'Unknown';
+}
+
+function concernColor(tier) {
+  const map = {
+    minimal: '#22c55e',
+    low: '#84cc16',
+    moderate: '#f59e0b',
+    elevated: '#f97316',
+    high: '#ef4444',
+  };
+  return map[(tier || '').toLowerCase()] ?? '#6b7280';
+}
+
+function scoreColor(val, invert = false) {
+  const n = parseFloat(val);
+  if (isNaN(n)) return '#4a5568';
+  const v = invert ? 1 - n : n;
+  if (v >= 0.75) return '#22c55e';
+  if (v >= 0.50) return '#f59e0b';
+  if (v >= 0.25) return '#f97316';
+  return '#ef4444';
+}
+
+function statusLabel(status) {
+  const map = {
+    regulatory_confirmed: 'Regulatory',
+    academically_established: 'Established',
+    academically_supported: 'Supported',
+    emerging: 'Emerging',
+    theoretical: 'Theoretical',
+    no_concern_found: 'No concern',
+    unassessed: 'Unassessed',
+  };
+  return map[status] ?? status ?? 'â';
+}
+
+function pathwayIcon(key) {
+  const map = {
+    mechanical_recycle: 'â»ï¸',
+    chemical_recycle: 'ð§ª',
+    industrial_compost: 'ð±',
+    home_compost: 'ðª±',
+    anaerobic_digestion: 'âï¸',
+    landfill: 'ðï¸',
+    incineration: 'ð¥',
+    ocean: 'ð',
+    open_environment: 'ð¿',
+    wastewater: 'ð§',
+  };
+  return map[key] ?? 'ð¦';
+}
+
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ScoreBar â reusable horizontal bar
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function ScoreBar({ label, value, invert = false, pct = false }) {
+  const display = value != null ? parseFloat(value) : null;
+  const width = display != null ? Math.round(display * 100) : 0;
+  const color = display != null ? scoreColor(display, invert) : '#4a5568';
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-3">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
-      >
-        <div className="flex items-center gap-2.5">
-          {Icon && <Icon size={16} style={{ color: '#6B7280' }} />}
-          <span className="font-semibold text-sm" style={{ color: '#1D1D1F' }}>{title}</span>
-        </div>
-        {open
-          ? <ChevronUp size={14} style={{ color: '#9CA3AF' }} />
-          : <ChevronDown size={14} style={{ color: '#9CA3AF' }} />}
-      </button>
-      {open && <div className="px-5 pb-5 pt-1">{children}</div>}
+    <div className="score-bar-row">
+      <span className="score-bar-label">{label}</span>
+      <div className="score-bar-track">
+        <div
+          className="score-bar-fill"
+          style={{ width: `${width}%`, background: color }}
+        />
+      </div>
+      <span className="score-bar-num">
+        {display != null ? (pct ? fmtPct(display * 100) : Math.round(display * 100)) : 'â'}
+      </span>
     </div>
   );
 }
 
-/* ── Score bar row ────────────────────────────────────────────── */
-function ScoreRow({ label, value, max = 100, color = "#22C55E" }) {
-  if (value == null) return null;
-  const pct = Math.min(100, Math.round((value / max) * 100));
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Panel wrapper
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function Panel({ icon, label, badge, children }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-      <span className="text-xs" style={{ color: '#485563' }}>{label}</span>
-      <div className="flex items-center gap-2">
-        <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#F3F4F6' }}>
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: pct + '%', backgroundColor: color }} />
-        </div>
-        <span className="text-xs font-bold tabular-nums w-8 text-right" style={{ color }}>{value}</span>
+    <div className="intel-panel">
+      <div className="intel-panel-header">
+        <span className="intel-panel-label">
+          <span className="intel-panel-icon">{icon}</span>
+          {label}
+        </span>
+        {badge}
       </div>
+      <div className="intel-panel-body">{children}</div>
     </div>
   );
 }
 
-/* ── Tag chip ─────────────────────────────────────────────────── */
-function Chip({ label, color = "#EF4444" }) {
-  return (
-    <span className="inline-flex text-xs px-2 py-1 rounded-full font-medium"
-      style={{ color, backgroundColor: color + '18', border: '1px solid ' + color + '40' }}>
-      {label}
-    </span>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-════════════════════════════════════════════════════════════════ */
-export default function ResultsPage() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-
-  const query    = searchParams.get("q") || searchParams.get("barcode") || "";
-  const isBarcode = /^\d{8,14}$/.test(query.trim());
-
-  const [result,    setResult]    = useState(null);
-  const [loading,   setLoading]   = useState(false);
-  const [error,     setError]     = useState(null);
-  const [showShare, setShowShare] = useState(false);
-
-  useEffect(() => {
-    if (!query) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    searchBioLens(query)
-      .then(data => {
-        setResult(data);
-        setLoading(false);
-        if (data?.found) saveScanToHistory?.(data);
-      })
-      .catch(err => {
-        setError(err?.message || "Lookup failed");
-        setLoading(false);
-      });
-  }, [query]);
-
-  /* ── Loading ─────────────────────────────────────────────── */
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4"
-        style={{ backgroundColor: '#F5F5F7' }}>
-        <div className="w-12 h-12 rounded-full border-4 border-green-200 border-t-green-600 animate-spin" />
-        <p className="text-sm" style={{ color: '#6B7280' }}>Analyzing material intelligence…</p>
-      </div>
-    );
-  }
-
-  /* ── Error ───────────────────────────────────────────────── */
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4"
-        style={{ backgroundColor: '#F5F5F7' }}>
-        <AlertCircle size={40} style={{ color: '#F87171' }} />
-        <p className="text-sm text-center" style={{ color: '#DC2626' }}>{error}</p>
-        <button onClick={() => navigate(-1)} className="text-sm underline" style={{ color: '#15803D' }}>Go back</button>
-      </div>
-    );
-  }
-
-  /* ── No query ────────────────────────────────────────────── */
-  if (!query) {
-    return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F7' }}>
-        <div className="max-w-xl mx-auto w-full px-4 pt-6"><SearchBar /></div>
-      </div>
-    );
-  }
-
-  /* ── Not found ───────────────────────────────────────────── */
-  if (result && !result.found) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4"
-        style={{ backgroundColor: '#F5F5F7' }}>
-        <ScanBarcode size={40} style={{ color: '#D1D5DB' }} />
-        <p className="text-sm text-center" style={{ color: '#6B7280' }}>
-          No material data found for <strong>{query}</strong>.
-        </p>
-        <button onClick={() => navigate(-1)} className="text-sm underline" style={{ color: '#15803D' }}>
-          Try another search
-        </button>
-      </div>
-    );
-  }
-
-  if (!result) return null;
-
-  /* ── Destructure payload ─────────────────────────────────── */
-  const {
-    product_name, brand, barcode: resultBarcode, image_url,
-    material_name, material_class, framework_tier,
-    materials,
-    petroload_score, petroload, risk_level, risk_label, risk_color,
-    overall_material_health_score, confidence_score, match_source,
-    pesticide_risk_score, petro_ag_dependency_score, processing_chemical_risk_score,
-    explanation,
-    alternatives,
-    lifecycle,
-    exposure,
-    origin_intelligence,
-    has_fiberfoundry_products,
-  } = result;
-
-  const displayScore    = petroload_score ?? petroload ?? null;
-  const confLabel       = getConfidenceLabel?.(confidence_score) ?? null;
-  const tier            = framework_tier || "unknown";
-  const tierCfg         = TIER_CONFIG[tier] || TIER_CONFIG.unknown;
-  const productDisplay  = product_name || material_name || query;
-
-  const expKey    = (exposure?.exposure_tier || "unknown").toLowerCase();
-  const expCfg    = EXPOSURE_CONFIG[expKey] || EXPOSURE_CONFIG.unknown;
-
-  const resGrade  = origin_intelligence?.resilience_grade;
-  const resColor  = resGrade ? (RESILIENCE_COLORS[resGrade] || "#6B7280") : null;
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Section 1: Product
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function ProductPanel({ scanData }) {
+  if (!scanData) return null;
+  const { title, brand, barcode, category, source, imageUrl } = scanData;
 
   return (
-    <div className="min-h-screen pb-16" style={{ backgroundColor: '#F5F5F7' }}>
-
-      {/* ── Nav bar ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-10 border-b border-gray-200 px-4 py-3"
-        style={{ backgroundColor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)' }}>
-        <div className="max-w-xl mx-auto flex items-center gap-3">
-          <button onClick={() => navigate(-1)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
-            <ArrowLeft size={18} style={{ color: '#374151' }} />
-          </button>
-          <div className="flex-1">
-            <SearchBar compact initialValue={query} />
+    <Panel icon="ð¦" label="Product Scanned">
+      <div className="product-panel-main">
+        <div className="product-image-wrap">
+          {imageUrl
+            ? <img src={imageUrl} alt={title || 'Product'} />
+            : <span className="product-image-placeholder">ð¦</span>
+          }
+        </div>
+        <div className="product-info">
+          <h2 className="product-name">{title || 'Unknown Product'}</h2>
+          {brand && <p className="product-brand">{brand}</p>}
+          <div className="product-meta-row">
+            {barcode && (
+              <span className="product-meta-chip">{barcode}</span>
+            )}
+            {category && (
+              <span className="product-meta-chip">{category}</span>
+            )}
+            {source && (
+              <span className="product-meta-chip source">{source}</span>
+            )}
           </div>
-          <button onClick={() => setShowShare(true)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0">
-            <Share2 size={18} style={{ color: '#374151' }} />
-          </button>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Section 2: Material Intelligence
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function MaterialPanel({ materials, isLoading }) {
+  if (isLoading) {
+    return (
+      <Panel icon="ð§¬" label="Material Intelligence">
+        <div className="results-loading" style={{ minHeight: 80, gap: 8 }}>
+          <div className="results-loading-spinner" style={{ width: 24, height: 24 }} />
+          <span className="results-loading-text">Resolving materialsâ¦</span>
+        </div>
+      </Panel>
+    );
+  }
+
+  if (!materials || materials.length === 0) {
+    return (
+      <Panel icon="ð§¬" label="Material Intelligence">
+        <p className="material-no-results">
+          No materials identified from this product's description.
+        </p>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel icon="ð§¬" label="Material Intelligence"
+      badge={
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          {materials.length} material{materials.length !== 1 ? 's' : ''}
+        </span>
+      }
+    >
+      {materials.map((m, i) => (
+        <MaterialItem key={m.material_id || i} material={m} />
+      ))}
+    </Panel>
+  );
+}
+
+function MaterialItem({ material: m }) {
+  const tc = tierClass(m.framework_tier || m.material_class);
+  const dotColors = {
+    bio_pure: '#22c55e',
+    bridge: '#f59e0b',
+    petrochemical: '#ef4444',
+    unknown: '#6b7280',
+  };
+
+  const petroScore = m.petroload_score != null ? parseFloat(m.petroload_score) : null;
+  const healthScore = m.overall_material_health_score != null ? parseFloat(m.overall_material_health_score) : null;
+  const confidenceScore = m.confidence_score != null ? parseFloat(m.confidence_score) : null;
+
+  return (
+    <div className="material-item">
+      <div className="material-item-header">
+        <div className="material-name-group">
+          <div
+            className="material-tier-dot"
+            style={{ background: dotColors[tc] ?? dotColors.unknown }}
+          />
+          <span className="material-name">{m.material_name || m.query}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className={`material-tier-badge tier-${tc}`}>
+            {tierLabel(m.framework_tier || m.material_class)}
+          </span>
+          {m.risk_label && (
+            <span style={{
+              fontSize: 10,
+              fontWeight: 700,
+              color: m.risk_color || 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)',
+            }}>
+              {m.risk_label}
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto px-4 pt-4">
-
-        {/* ══════════════════════════════════════════════════════
-            1. PRODUCT SCANNED
-        ══════════════════════════════════════════════════════ */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-3 flex gap-4">
-          {image_url && (
-            <img src={image_url} alt={productDisplay}
-              className="w-20 h-20 rounded-xl object-cover border border-gray-100 flex-shrink-0"
-              onError={e => { e.currentTarget.style.display = 'none'; }} />
+      {/* Score bars */}
+      {(petroScore != null || healthScore != null || confidenceScore != null) && (
+        <div className="material-score-bar-wrap">
+          {petroScore != null && (
+            <ScoreBar label="Petro load" value={petroScore} invert />
           )}
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-base leading-snug" style={{ color: '#1D1D1F' }}>
-              {productDisplay}
-            </h1>
-            {brand && (
-              <p className="text-sm mt-0.5" style={{ color: '#6B7280' }}>{brand}</p>
-            )}
-            {(resultBarcode || isBarcode) && (
-              <p className="text-xs mt-1 font-mono" style={{ color: '#9CA3AF' }}>
-                {resultBarcode || query}
-              </p>
-            )}
-            <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-              <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border"
-                style={{ color: tierCfg.color, backgroundColor: tierCfg.bg, borderColor: tierCfg.border }}>
-                {tierCfg.label}
+          {healthScore != null && (
+            <ScoreBar label="Mat. health" value={healthScore} />
+          )}
+          {m.pesticide_risk_score != null && (
+            <ScoreBar label="Pesticide" value={m.pesticide_risk_score} invert />
+          )}
+          {m.processing_chemical_risk_score != null && (
+            <ScoreBar label="Processing" value={m.processing_chemical_risk_score} invert />
+          )}
+        </div>
+      )}
+
+      {/* Explanation */}
+      {m.explanation && (
+        <div style={{ padding: '0 16px 12px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+          {m.explanation}
+        </div>
+      )}
+
+      {/* Alternatives */}
+      {m.alternatives && m.alternatives.length > 0 && (
+        <div className="material-alternatives">
+          <div className="alternatives-label">Better alternatives</div>
+          <div className="alternatives-list">
+            {m.alternatives.slice(0, 4).map((alt, i) => (
+              <span key={i} className="alternative-chip">{alt.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Section 3: Exposure / Toxicity
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function ToxicityPanel({ materials, isLoading }) {
+  if (isLoading) {
+    return (
+      <Panel icon="âï¸" label="Toxicity & Exposure">
+        <div className="results-loading" style={{ minHeight: 80, gap: 8 }}>
+          <div className="results-loading-spinner" style={{ width: 24, height: 24 }} />
+          <span className="results-loading-text">Loading exposure dataâ¦</span>
+        </div>
+      </Panel>
+    );
+  }
+
+  // Find first material with available exposure data
+  const withExposure = (materials || []).filter(m => m.exposure?.available);
+
+  if (withExposure.length === 0) {
+    const hasAssessments = (materials || []).some(
+      m => m.exposure?.reason === 'assessments_not_yet_published'
+    );
+
+    return (
+      <Panel icon="âï¸" label="Toxicity & Exposure">
+        <p className="toxicity-unavailable">
+          {hasAssessments
+            ? 'Assessments are in progress â not yet published.'
+            : 'No toxicity assessment data available for these materials yet.'
+          }
+          <small>BioLens toxicity intelligence is built from peer-reviewed literature and regulatory sources. Coverage is expanding.</small>
+        </p>
+      </Panel>
+    );
+  }
+
+  // Show the highest-concern exposure profile
+  const sorted = [...withExposure].sort((a, b) => {
+    const tierOrder = { high: 4, elevated: 3, moderate: 2, low: 1, minimal: 0 };
+    return (tierOrder[b.exposure.exposure_tier] ?? 0) - (tierOrder[a.exposure.exposure_tier] ?? 0);
+  });
+
+  const primary = sorted[0];
+  const exp = primary.exposure;
+
+  const tierStr = (exp.exposure_tier || 'unknown').toLowerCase();
+  const highCount = (exp.concern_count_very_high ?? 0) + (exp.concern_count_high ?? 0);
+  const modCount = exp.concern_count_moderate ?? 0;
+
+  return (
+    <Panel icon="âï¸" label="Toxicity & Exposure"
+      badge={
+        sorted.length > 1 && (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {primary.material_name}
+          </span>
+        )
+      }
+    >
+      {/* Tier + quality */}
+      <div className="toxicity-tier-row">
+        <span className={`toxicity-tier-badge concern-${tierStr}`}>
+          {tierStr.charAt(0).toUpperCase() + tierStr.slice(1)} Exposure
+        </span>
+        <span className="toxicity-confidence">
+          {exp.evidence_quality ? `${exp.evidence_quality} evidence` : ''}
+        </span>
+      </div>
+
+      {/* Concern counts */}
+      {(highCount > 0 || modCount > 0) && (
+        <div className="toxicity-counts-row">
+          x(exp.concern_count_very_high ?? 0) > 0 && (
+            <div className="concern-count-chip very-high">
+              <span className="count-num">{exp.concern_count_very_high}</span>
+              very high
+            </div>
+          )}
+          {(exp.concern_count_high ?? 0) > 0 && (
+            <div className="concern-count-chip high">
+              <span className="count-num">{exp.concern_count_high}</span>
+              high
+            </div>
+          )}
+          {modCount > 0 && (
+            <div className="concern-count-chip moderate">
+              <span className="count-num">{modCount}</span>
+              moderate
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Highest concern status */}
+      {exp.highest_concern_status && exp.highest_concern_status !== 'unassessed' && (
+        <div className="toxicity-status-row">
+          <div className={`status-dot status-${exp.highest_concern_status}`} />
+          <span className="status-label">
+            Highest status: <strong style={{ color: 'var(--text-primary)' }}>
+              {statusLabel(exp.highest_concern_status)}
+            </strong>
+          </span>
+          {exp.highest_concern_dimension && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {exp.highest_concern_dimension.replace(/_/g, ' ')}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Evidence signals */}
+      <div className="toxicity-signals-row">
+        <span className={`toxicity-signal-chip ${exp.has_regulatory_classification ? 'active' : ''}`}>
+          {exp.has_regulatory_classification ? 'â' : 'â'} Regulatory listing
+        </span>
+        <span className={`toxicity-signal-chip ${exp.has_biomonitoring_evidence ? 'active' : ''}`}>
+          {exp.has_biomonitoring_evidence ? 'â' : 'â'} Biomonitoring
+        </span>
+        <span className={`toxicity-signal-chip ${exp.has_human_observational_evidence ? 'active' : ''}`}>
+          {exp.has_human_observational_evidence ? 'â' : 'â'} Human observational
+        </span>
+        {exp.count_regulatory_confirmed > 0 && (
+          <span className="toxicity-signal-chip active">
+            {exp.count_regulatory_confirmed} regulatory confirmed
+          </span>
+        )}
+        {exp.count_academically_established > 0 && (
+          <span className="toxicity-signal-chip active">
+            {exp.count_academically_established} academically established
+          </span>
+        )}
+      </div>
+
+      {/* Processing-only caveat */}
+      {exp.primary_concerns_are_processing_only && (
+        <div className="toxicity-caveat">
+          â ï¸ Primary concerns are associated with manufacturing and processing chemistry, not the finished material in typical consumer use.
+        </div>
+      )}
+
+      {/* Consumer summary */}
+      {exp.consumer_summary && (
+        <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          {exp.consumer_summary}
+        </div>
+      )}
+
+      {/* Additional materials with exposure data */}
+      {sorted.length > 1 && (
+        <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          {sorted.slice(1).map((m, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 12 }}>
+              <span style={{ color: 'var(--text-muted)', flex: 1 }}>{m.material_name}</span>
+              <span className={`toxicity-tier-badge concern-${(m.exposure.exposure_tier || '').toLowerCase()}`}
+                style={{ fontSize: 10, padding: '1px 8px' }}>
+                {m.exposure.exposure_tier}
               </span>
-              {risk_label && (
-                <span className="inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full border"
-                  style={{
-                    color: risk_color || '#6B7280',
-                    backgroundColor: (risk_color || '#6B7280') + '18',
-                    borderColor: (risk_color || '#6B7280') + '40'
-                  }}>
-                  {risk_label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="toxicity-disclaimer">
+        BioLens toxicity intelligence is for informational purposes only. It is not medical advice. Concern levels reflect material-level evidence, not individual product formulations.
+      </div>
+    </Panel>
+  );
+}
+
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Section 4: Origin Intelligence
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function OriginPanel({ originData }) {
+  if (!originData) {
+    return (
+      <Panel icon="ð" label="Origin Intelligence">
+        <p className="origin-unavailable">Origin data not available for this product.</p>
+      </Panel>
+    );
+  }
+
+  if (!originData.origin_available) {
+    return (
+      <Panel icon="ð" label="Origin Intelligence">
+        <p className="origin-unavailable">
+          {originData.reason === 'no_origin_profile'
+            ? 'Origin could not be determined from available data.'
+            : 'Origin data unavailable.'}
+        </p>
+      </Panel>
+    );
+  }
+
+  const origin = originData.origin ?? {};
+  const tariff = originData.tariff ?? {};
+  const transport = originData.transport ?? {};
+  const importStatus = originData.import_status ?? {};
+  const resilience = originData.resilience ?? {};
+
+  const statusKey = (origin.status || importStatus.status || 'unknown').toLowerCase();
+  const gradeKey = (resilience.grade || '').toUpperCase();
+
+  return (
+    <Panel icon="ð" label="Origin Intelligence">
+      {/* Country header */}
+      <div className="origin-main-row">
+        <div className="origin-country-block">
+          <span className="origin-country-flag">
+            {countryFlag(origin.country_code)}
+          </span>
+          <div>
+            <div className="origin-country-name">
+              {origin.country || 'Unknown origin'}
+            </div>
+            {origin.region && (
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{origin.region}</div>
+            )}
+            <div className="origin-confidence">
+              {origin.confidence != null ? `${Math.round(origin.confidence * 100)}% confidence` : ''}
+              {origin.claim_count > 0 ? ` Â· ${origin.claim_count} claim${origin.claim_count !== 1 ? 's' : ''}` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <span className={`origin-status-badge origin-status-${statusKey}`}>
+            {importStatus.status || origin.status || 'unknown'}
+          </span>
+          {resilience.grade && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Resilience</span>
+              <span className={`resilience-grade-badge grade-${gradeKey}`}>{resilience.grade}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Stat grid */}
+      <div className="origin-grid">
+        {/* Tariff */}
+        <div className="origin-stat-card">
+          <div className="origin-stat-label">Tariff exposure</div>
+          {tariff.available === false ? (
+            <div className="origin-stat-value" style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not available</div>
+          ) : (
+            <>
+              <div className="origin-stat-value" style={{
+                color: (tariff.typical_pct ?? 0) > 20 ? 'var(--concern-high)'
+                  : (tariff.typical_pct ?? 0) > 10 ? 'var(--concern-moderate)'
+                  : 'var(--concern-minimal)'
+              }}>
+                {tariff.typical_pct != null ? fmtPct(tariff.typical_pct) : 'â'}
+              </div>
+              {tariff.min_pct != null && tariff.max_pct != null && (
+                <div className="origin-stat-sub">
+                  range {fmtPct(tariff.min_pct)} â {fmtPct(tariff.max_pct)}
+                </div>
+              )}
+              {tariff.target_market && (
+                <div className="origin-stat-sub">{tariff.target_market} market</div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Transport */}
+        <div className="origin-stat-card">
+          <div className="origin-stat-label">Transport</div>
+          {transport.available === false ? (
+            <div className="origin-stat-value" style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not available</div>
+          ) : (
+            <>
+              <div className="origin-stat-value">
+                {transport.distance_km_estimate != null
+                  ? `${Number(transport.distance_km_estimate).toLocaleString()} km`
+                  : (transport.distance_km_min != null
+                    ? `${Number(transport.distance_km_min).toLocaleString()}+ km`
+                    : 'â')}
+              </div>
+              {transport.mode && (
+                <div className="origin-stat-sub">{transport.mode}</div>
+              )}
+              {transport.burden_score != null && (
+                <div className="origin-stat-sub">
+                  burden {Math.round(transport.burden_score * 100)}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Import status */}
+        {importStatus.available !== false && importStatus.status && (
+          <div className="origin-stat-card">
+            <div className="origin-stat-label">Import status</div>
+            <div className="origin-stat-value" style={{ textTransform: 'capitalize', fontSize: 13 }}>
+              {importStatus.status}
+            </div>
+            {importStatus.market && (
+              <div className="origin-stat-sub">{importStatus.market} market</div>
+            )}
+          </div>
+        )}
+
+        {/* Resilience score */}
+        {resilience.available !== false && resilience.score != null && (
+          <div className="origin-stat-card">
+            <div className="origin-stat-label">Supply resilience</div>
+            <div className="origin-stat-value">
+              {Math.round(resilience.score * 100)} / 100
+            </div>
+            {resilience.components && (
+              <div className="origin-stat-sub">
+                geo risk {Math.round((resilience.components.geopolitical_risk ?? 0) * 100)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Claims */}
+      {originData.claims && originData.claims.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          {originData.claims.slice(0, 3).map((c, i) => (
+            <div key={i} style={{
+              fontSize: 11, color: 'var(--text-muted)', padding: '4px 0',
+              borderBottom: i < 2 ? '1px solid var(--border)' : 'none',
+              lineHeight: 1.4,
+            }}>
+              <span style={{ color: 'var(--text-secondary)', marginRight: 6 }}>
+                {c.evidence_type?.replace(/_/g, ' ')}
+              </span>
+              {c.claim_text}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p className="origin-note">
+        Origin intelligence is derived from product label parsing and trade data.
+        Confidence reflects evidence quality, not guarantee of origin.
+      </p>
+    </Panel>
+  );
+}
+
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Section 5: Lifecycle Intelligence
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function LifecyclePanel({ materials, isLoading }) {
+  if (isLoading) {
+    return (
+      <Panel icon="â»ï¸" label="Lifecycle Intelligence">
+        <div className="results-loading" style={{ minHeight: 80, gap: 8 }}>
+          <div className="results-loading-spinner" style={{ width: 24, height: 24 }} />
+          <span className="results-loading-text">Loading lifecycle dataâ¦</span>
+        </div>
+      </Panel>
+    );
+  }
+
+  const withLifecycle = (materials || []).filter(m => m.lifecycle?.available);
+
+  if (withLifecycle.length === 0) {
+    return (
+      <Panel icon="â»ï¸" label="Lifecycle Intelligence">
+        <p className="lifecycle-unavailable">
+          No lifecycle data available for these materials yet.
+        </p>
+      </Panel>
+    );
+  }
+
+  const primary = withLifecycle[0];
+  const lc = primary.lifecycle;
+
+  const compositeNum = lc.composite_score != null ? Math.round(parseFloat(lc.composite_score) * 100) : null;
+  const compositeColor = compositeNum != null ? scoreColor(lc.composite_score) : 'var(--text-muted)';
+
+  return (
+    <Panel icon="â»ï¸" label="Lifecycle Intelligence"
+      badge={
+        withLifecycle.length > 1 && (
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            {primary.material_name}
+          </span>
+        )
+      }
+    >
+      {/* Summary row */}
+      <div className="lifecycle-summary-row">
+        {compositeNum != null && (
+          <div className="lifecycle-composite">
+            <div className="lifecycle-composite-ring" style={{ borderColor: compositeColor, color: compositeColor }}>
+              {compositeNum}
+            </div>
+            <span className="lifecycle-composite-label">composite</span>
+          </div>
+        )}
+
+        <div className="lifecycle-flags">
+          <div className={`lifecycle-flag ${lc.is_biodegradable ? 'good' : 'bad'}`}>
+            <span className="lifecycle-flag-icon">{lc.is_biodegradable ? 'ð±' : 'ð«'}</span>
+            <span className="lifecycle-flag-text">
+              {lc.is_biodegradable ? 'Biodegradable' : 'Not biodegradable'}
+            </span>
+          </div>
+          <div className={`lifecycle-flag ${lc.produces_microplastics ? 'bad' : 'good'}`}>
+            <span className="lifecycle-flag-icon">{lc.produces_microplastics ? 'â ï¸' : 'â'}</span>
+            <span className="lifecycle-flag-text">
+              {lc.produces_microplastics ? 'Produces microplastics' : 'No microplastic generation'}
+            </span>
+          </div>
+          <div className={`lifecycle-flag ${lc.is_recoverable ? 'good' : 'warn'}`}>
+            <span className="lifecycle-flag-icon">{lc.is_recoverable ? 'â»ï¸' : 'ðï¸'}</span>
+            <span className="lifecycle-flag-text">
+              {lc.is_recoverable
+                ? `Recoverable${lc.best_end_of_life_pathway ? ` Â· ${lc.best_end_of_life_pathway.replace(/_/g, ' ')}` : ''}`
+                : 'Not easily recoverable'
+              }
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Score bars */}
+      {(lc.recyclability_score != null || lc.compostability_score != null ||
+        lc.microplastic_risk_score != null || lc.landfill_persistence_score != null) && (
+        <div className="lifecycle-scores-grid">
+          {lc.recyclability_score != null && (
+            <div className="lifecycle-score-item">
+              <div className="score-label">Recyclability</div>
+              <div className="lifecycle-bar-row">
+                <div className="lifecycle-bar-track">
+                  <div className="lifecycle-bar-fill" style={{
+                    width: `${Math.round(parseFloat(lc.recyclability_score) * 100)}%`,
+                    background: scoreColor(lc.recyclability_score),
+                  }} />
+                </div>
+                <span className="lifecycle-bar-num">
+                  {Math.round(parseFloat(lc.recyclability_score) * 100)}
+                </span>
+              </div>
+            </div>
+          )}
+          {lc.compostability_score != null && (
+            <div className="lifecycle-score-item">
+              <div className="score-label">Compostability</div>
+              <div className="lifecycle-bar-row">
+                <div className="lifecycle-bar-track">
+                  <div className="lifecycle-bar-fill" style={{
+                    width: `${Math.round(parseFloat(lc.compostability_score) * 100)}%`,
+                    background: scoreColor(lc.compostability_score),
+                  }} />
+                </div>
+                <span className="lifecycle-bar-num">
+                  {Math.round(parseFloat(lc.compostability_score) * 100)}
+                </span>
+              </div>
+            </div>
+          )}
+          {lc.microplastic_risk_score != null && (
+            <div className="lifecycle-score-item">
+              <div className="score-label">Microplastic risk</div>
+              <div className="lifecycle-bar-row">
+                <div className="lifecycle-bar-track">
+                  <div className="lifecycle-bar-fill" style={{
+                    width: `${Math.round(parseFloat(lc.microplastic_risk_score) * 100)}%`,
+                    background: scoreColor(lc.microplastic_risk_score, true),
+                  }} />
+                </div>
+                <span className="lifecycle-bar-num">
+                  {Math.round(parseFloat(lc.microplastic_risk_score) * 100)}
+                </span>
+              </div>
+            </div>
+          )}
+          {lc.landfill_persistence_score != null && (
+            <div className="lifecycle-score-item">
+              <div className="score-label">Landfill persist.</div>
+              <div className="lifecycle-bar-row">
+                <div className="lifecycle-bar-track">
+                  <div className="lifecycle-bar-fill" style={{
+                    width: `${Math.round(parseFloat(lc.landfill_persistence_score) * 100)}%`,
+                    background: scoreColor(lc.landfill_persistence_score, true),
+                  }} />
+                </div>
+                <span className="lifecycle-bar-num">
+                  {Math.round(parseFloat(lc.landfill_persistence_score) * 100)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pathway profiles */}
+      {lc.pathway_profiles && lc.pathway_profiles.length > 0 && (
+        <div className="lifecycle-pathways">
+          <div className="lifecycle-pathways-title">End-of-life pathways</div>
+          {lc.pathway_profiles.map((p, i) => (
+            <div key={i} className="pathway-row">
+              <span className="pathway-icon">{pathwayIcon(p.pathway_key)}</span>
+              <span className="pathway-name">
+                {p.pathway_key?.replace(/_/g, ' ') ?? 'Unknown pathway'}
+              </span>
+              {p.degrades != null && (
+                <span className={`pathway-chip ${p.degrades ? 'yes' : 'no'}`}>
+                  {p.degrades ? 'degrades' : 'persists'}
                 </span>
               )}
+              {p.recoverable != null && (
+                <span className={`pathway-chip ${p.recoverable ? 'yes' : 'no'}`}>
+                  {p.recoverable ? 'recoverable' : 'not recoverable'}
+                </span>
+              )}
+              {p.produces_microplastics && (
+                <span className="pathway-chip warn">microplastics</span>
+              )}
             </div>
-          </div>
+          ))}
         </div>
+      )}
 
-        {/* ══════════════════════════════════════════════════════
-            2. MATERIAL INTELLIGENCE
-        ══════════════════════════════════════════════════════ */}
-        <Section icon={FlaskConical} title="Material Intelligence">
-          <div className="mb-3">
-            <p className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>
-              Identified Material
-            </p>
-            <p className="font-semibold" style={{ color: '#1D1D1F' }}>{material_name || "Unknown"}</p>
-            {material_class && (
-              <p className="text-xs mt-0.5" style={{ color: '#6B7280' }}>{material_class}</p>
-            )}
-          </div>
-
-          {Array.isArray(materials) && materials.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: '#9CA3AF' }}>Composition</p>
-              <div className="space-y-1">
-                {materials.map((m, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm">
-                    <span style={{ color: '#374151' }}>{m.name || m.material_name}</span>
-                    {m.fraction != null && (
-                      <span className="tabular-nums" style={{ color: '#6B7280' }}>
-                        {Math.round(m.fraction * 100)}%
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+      {/* Other materials brief */}
+      {withLifecycle.length > 1 && (
+        <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          {withLifecycle.slice(1).map((m, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 12 }}>
+              <span style={{ color: 'var(--text-muted)', flex: 1 }}>{m.material_name}</span>
+              {m.lifecycle.is_biodegradable && (
+                <span style={{ fontSize: 10, color: 'var(--concern-minimal)' }}>biodegradable</span>
+              )}
+              {m.lifecycle.produces_microplastics && (
+                <span style={{ fontSize: 10, color: 'var(--concern-high)' }}>microplastics</span>
+              )}
             </div>
-          )}
+          ))}
+        </div>
+      )}
+    </Panel>
+  );
+}
 
-          {displayScore != null && (
-            <div className="mb-3">
-              <PetroloadMeter score={displayScore} riskLevel={risk_level} riskColor={risk_color} />
-            </div>
-          )}
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Main ResultsPage component
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+export default function ResultsPage({ initialScanData, initialBarcode, onBack }) {
+  // ââ URL params (for ?q= and ?barcode= routing from SearchBar) ââââââââââââââ
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const qParam = searchParams.get('q') || '';
+  const barcodeParam = searchParams.get('barcode') || '';
 
-          <div>
-            <ScoreRow label="Petroload Score" value={displayScore} max={100} color="#EF4444" />
-            <ScoreRow label="Overall Health Score" value={overall_material_health_score} max={100} color="#22C55E" />
-            <ScoreRow label="Pesticide Risk" value={pesticide_risk_score} max={10} color="#F59E0B" />
-            <ScoreRow label="Petro-Ag Dependency" value={petro_ag_dependency_score} max={10} color="#F97316" />
-            <ScoreRow label="Processing Chemical Risk" value={processing_chemical_risk_score} max={10} color="#8B5CF6" />
-          </div>
+  // ââ State ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  const [scanData, setScanData] = useState(initialScanData || null);
+  const [materials, setMaterials] = useState([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-          {explanation && (
-            <p className="mt-3 text-xs leading-relaxed pt-3 border-t border-gray-100"
-              style={{ color: '#485563' }}>{explanation}</p>
-          )}
+  // Manual search â pre-fill from URL param
+  const [searchQuery, setSearchQuery] = useState(qParam);
 
-          {confidence_score != null && (
-            <div className="mt-2 flex items-center gap-1.5">
-              <Info size={11} style={{ color: '#9CA3AF' }} />
-              <span className="text-xs" style={{ color: '#9CA3AF' }}>
-                Confidence: {confLabel || (Math.round(confidence_score * 100) + '%')}
-                {match_source ? ' · ' + match_source : ''}
-              </span>
-            </div>
-          )}
-        </Section>
+  // ââ Derived origin data ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  const originData = scanData?.origin_intelligence ?? null;
 
-        {/* ══════════════════════════════════════════════════════
-            3. TOXICITY & EXPOSURE INTELLIGENCE
-        ══════════════════════════════════════════════════════ */}
-        <Section icon={ShieldAlert} title="Toxicity & Exposure Intelligence">
-          {exposure ? (
-            <>
-              <div className="rounded-xl p-3 mb-4 border"
-                style={{ backgroundColor: expCfg.bg, borderColor: expCfg.border }}>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold" style={{ color: expCfg.color }}>
-                    {expCfg.label}
-                  </span>
-                  {exposure.confidence_label && (
-                    <span className="text-xs" style={{ color: '#6B7280' }}>
-                      {exposure.confidence_label}
-                    </span>
-                  )}
-                </div>
-                {exposure.caveat && (
-                  <p className="text-xs mt-1.5 leading-relaxed" style={{ color: '#374151' }}>
-                    {exposure.caveat}
-                  </p>
-                )}
-              </div>
+  // ââ Resolve materials from scan tokens ââââââââââââââââââââââââââââââââââââ
+  const resolveMaterials = useCallback(async (tokens, inferredFromTitle) => {
+    if (!tokens || tokens.length === 0) {
+      setMaterials([]);
+      return;
+    }
+    setLoadingMaterials(true);
+    try {
+      const resolved = await analyzeTokens(tokens);
+      setMaterials(resolved);
+    } catch (err) {
+      console.warn('analyzeTokens error:', err);
+      setMaterials([]);
+    } finally {
+      setLoadingMaterials(false);
+    }
+  }, []);
 
-              {Array.isArray(exposure.concern_dimensions) && exposure.concern_dimensions.length > 0 && (
-                <div className="mb-3">
-                  <p className="text-xs font-medium uppercase tracking-wider mb-2"
-                    style={{ color: '#9CA3AF' }}>Highest Concern Dimensions</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {exposure.concern_dimensions.slice(0, 10).map((dim, i) => (
-                      <Chip key={i}
-                        label={typeof dim === "string" ? dim : (dim.name || dim.dimension || dim)}
-                        color={expCfg.color} />
-                    ))}
-                  </div>
-                </div>
-              )}
+  // ââ Initial load ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  useEffect(() => {
+    if (initialScanData) {
+      setScanData(initialScanData);
+      resolveMaterials(initialScanData.input_tokens || []);
+      return;
+    }
 
-              {exposure.evidence_basis && (
-                <p className="text-xs leading-relaxed pt-3 border-t border-gray-100"
-                  style={{ color: '#485563' }}>{exposure.evidence_basis}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm italic" style={{ color: '#9CA3AF' }}>
-              Exposure data not available for this material.
-            </p>
-          )}
-        </Section>
+    const barcode = initialBarcode || barcodeParam;
+    if (barcode) {
+      setScanLoading(true);
+      scanBarcode(barcode)
+        .then(data => {
+          setScanData(data);
+          resolveMaterials(data.input_tokens || []);
+        })
+        .catch(err => {
+          setError('Could not look up this barcode. Try searching by material name.');
+          console.warn(err);
+        })
+        .finally(() => setScanLoading(false));
+      return;
+    }
 
-        {/* ══════════════════════════════════════════════════════
-            4. ORIGIN INTELLIGENCE
-        ══════════════════════════════════════════════════════ */}
-        <Section icon={Globe} title="Origin Intelligence">
-          {origin_intelligence ? (
-            <div className="space-y-3">
-              {origin_intelligence.origin_status && (
-                <div className="flex items-start gap-2.5 p-3 rounded-xl border"
-                  style={{ backgroundColor: 'rgba(59,130,246,0.06)', borderColor: '#3B82F640' }}>
-                  <MapPin size={15} style={{ color: '#3B82F6', marginTop: 2, flexShrink: 0 }} />
-                  <div>
-                    <p className="text-xs font-medium" style={{ color: '#3B82F6' }}>Origin Status</p>
-                    <p className="text-sm font-semibold mt-0.5" style={{ color: '#1E3A5F' }}>
-                      {origin_intelligence.origin_status}
-                    </p>
-                  </div>
-                </div>
-              )}
+    if (qParam) {
+      setLoadingMaterials(true);
+      analyzeMaterial(qParam)
+        .then(result => {
+          if (result && result.found) {
+            setMaterials([result]);
+          } else {
+            setMaterials([]);
+            setError(`No material data found for "${qParam}".`);
+          }
+        })
+        .catch(err => {
+          setError('Material lookup failed. Please try again.');
+          console.warn(err);
+        })
+        .finally(() => setLoadingMaterials(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-              <div className="grid grid-cols-2 gap-2">
-                {origin_intelligence.best_origin_country && (
-                  <div className="p-3 rounded-xl border border-gray-200" style={{ backgroundColor: '#F9FAFB' }}>
-                    <p className="text-xs" style={{ color: '#9CA3AF' }}>Best Origin</p>
-                    <p className="text-sm font-semibold mt-0.5" style={{ color: '#1D1D1F' }}>
-                      {origin_intelligence.best_origin_country}
-                    </p>
-                  </div>
-                )}
+  const handleSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setLoadingMaterials(true);
+    setError(null);
+    try {
+      const result = await analyzeMaterial(q);
+      if (result.found) {
+        setMaterials([result]);
+      } else {
+        setMaterials([]);
+        setError(`No material found for "${q}".`);
+      }
+    } catch (err) {
+      setError('Material lookup failed. Please try again.');
+      console.warn(err);
+    } finally {
+      setLoadingMaterials(false);
+    }
+  }, [searchQuery]);
 
-                {resGrade && (
-                  <div className="p-3 rounded-xl border"
-                    style={{ backgroundColor: resColor + '12', borderColor: resColor + '40' }}>
-                    <p className="text-xs" style={{ color: resColor }}>Resilience</p>
-                    <p className="text-2xl font-extrabold" style={{ color: resColor }}>{resGrade}</p>
-                  </div>
-                )}
+  const handleSearchKey = useCallback((e) => {
+    if (e.key === 'Enter') handleSearch();
+  }, [handleSearch]);
 
-                {origin_intelligence.tariff_exposure_range && (
-                  <div className="p-3 rounded-xl border border-gray-200" style={{ backgroundColor: '#F9FAFB' }}>
-                    <p className="text-xs" style={{ color: '#9CA3AF' }}>Tariff Exposure</p>
-                    <p className="text-sm font-semibold mt-0.5" style={{ color: '#1D1D1F' }}>
-                      {origin_intelligence.tariff_exposure_range}
-                    </p>
-                  </div>
-                )}
+  if (scanLoading) {
+    return (
+      <div className="results-page">
+        <div className="results-loading">
+          <div className="results-loading-spinner" />
+          <span className="results-loading-text">Scanning productâ¦</span>
+        </div>
+      </div>
+    );
+  }
 
-                {origin_intelligence.transport_estimate && (
-                  <div className="p-3 rounded-xl border border-gray-200" style={{ backgroundColor: '#F9FAFB' }}>
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <Truck size={11} style={{ color: '#9CA3AF' }} />
-                      <p className="text-xs" style={{ color: '#9CA3AF' }}>Transport</p>
-                    </div>
-                    <p className="text-sm font-semibold" style={{ color: '#1D1D1F' }}>
-                      {origin_intelligence.transport_estimate}
-                    </p>
-                  </div>
-                )}
-
-                {origin_intelligence.market_import_status && (
-                  <div className="p-3 rounded-xl border border-gray-200 col-span-2"
-                    style={{ backgroundColor: '#F9FAFB' }}>
-                    <p className="text-xs" style={{ color: '#9CA3AF' }}>Market Import Status</p>
-                    <p className="text-sm font-semibold mt-0.5" style={{ color: '#1D1D1F' }}>
-                      {origin_intelligence.market_import_status}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-sm italic" style={{ color: '#9CA3AF' }}>
-              Origin data not available for this product.
-            </p>
-          )}
-        </Section>
-
-        {/* ══════════════════════════════════════════════════════
-            5. LIFECYCLE INTELLIGENCE
-        ══════════════════════════════════════════════════════ */}
-        <Section icon={Recycle} title="Lifecycle Intelligence">
-          {lifecycle ? (
-            <>
-              {lifecycle.composite_score != null && (
-                <div className="p-3 rounded-xl border mb-4"
-                  style={{ backgroundColor: 'rgba(34,197,94,0.06)', borderColor: '#22C55E40' }}>
-                  <p className="text-xs font-medium" style={{ color: '#15803D' }}>Lifecycle Score</p>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-2xl font-extrabold" style={{ color: '#15803D' }}>
-                      {lifecycle.composite_score}
-                    </span>
-                    <span className="text-xs" style={{ color: '#16A34A' }}>/100</span>
-                  </div>
-                </div>
-              )}
-
-              <ScoreRow label="Recyclability" value={lifecycle.recyclability} max={10} color="#22C55E" />
-              <ScoreRow label="Compostability" value={lifecycle.compostability} max={10} color="#84CC16" />
-              <ScoreRow
-                label="Microplastic Risk"
-                value={lifecycle.microplastic_risk}
-                max={10}
-                color={
-                  lifecycle.microplastic_risk > 6 ? "#EF4444"
-                  : lifecycle.microplastic_risk > 3 ? "#F59E0B"
-                  : "#22C55E"
-                }
-              />
-
-              {lifecycle.landfill_persistence_years != null && (
-                <div className="flex items-center justify-between py-2 border-b border-gray-100">
-                  <span className="text-xs" style={{ color: '#485563' }}>Landfill Persistence</span>
-                  <span className="text-xs font-semibold" style={{ color: '#374151' }}>
-                    {lifecycle.landfill_persistence_years === 0
-                      ? "Biodegradable"
-                      : lifecycle.landfill_persistence_years > 500
-                      ? "500+ years"
-                      : "~" + lifecycle.landfill_persistence_years + " years"}
-                  </span>
-                </div>
-              )}
-
-              {lifecycle.best_end_of_life && (
-                <div className="mt-3 p-3 rounded-xl border"
-                  style={{ backgroundColor: 'rgba(34,197,94,0.06)', borderColor: '#22C55E40' }}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <Leaf size={13} style={{ color: '#15803D' }} />
-                    <p className="text-xs font-medium" style={{ color: '#15803D' }}>Best End-of-Life</p>
-                  </div>
-                  <p className="text-sm" style={{ color: '#166534' }}>{lifecycle.best_end_of_life}</p>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="text-sm italic" style={{ color: '#9CA3AF' }}>
-              Lifecycle data not available for this material.
-            </p>
-          )}
-        </Section>
-
-        {/* ── MaterialDNA / alternatives ──────────────────────── */}
-        {result && (
-          <div className="mb-3">
-            <MaterialDNA material={result} alternatives={alternatives} />
-          </div>
-        )}
-
-        {/* ── FiberFoundry CTA ────────────────────────────────── */}
-        {has_fiberfoundry_products && (
-          <div className="rounded-2xl p-5 mb-3" style={{ backgroundColor: '#14532D' }}>
-            <div className="flex items-center gap-2 mb-1">
-              <Leaf size={15} style={{ color: '#86EFAC' }} />
-              <span className="text-sm font-semibold text-white">Available on FiberFoundry</span>
-            </div>
-            <p className="text-xs leading-relaxed" style={{ color: '#BBF7D0' }}>
-              Better alternatives to this product are available in the FiberFoundry marketplace.
-            </p>
-            <button className="mt-3 text-xs font-bold px-4 py-2 rounded-full transition-colors"
-              style={{ backgroundColor: 'white', color: '#14532D' }}>
-              Shop Alternatives
-            </button>
-          </div>
-        )}
-
-        {/* ── Purchase Impact ──────────────────────────────────── */}
-        {result && <PurchaseImpact result={result} />}
-
+  return (
+    <div className="results-page">
+      <div className="results-header">
+        <button className="results-back-btn" onClick={onBack || (() => navigate(-1))}>
+          â Back
+        </button>
+        <span className="results-header-title">
+          {scanData?.title
+            ? scanData.title.substring(0, 50)
+            : 'Material Intelligence'}
+        </span>
       </div>
 
-      {/* ── Share modal ─────────────────────────────────────────── */}
-      {showShare && result && (
-        <ShareCard result={result} query={productDisplay} onClose={() => setShowShare(false)} />
-      )}
+      <div className="results-content">
+        <div className="results-search-row">
+          <input
+            className="results-search-input"
+            type="text"
+            placeholder="Search by material name (e.g. polyester, hemp, pvc)"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKey}
+          />
+          <button
+            className="results-search-btn"
+            onClick={handleSearch}
+            disabled={loadingMaterials || !searchQuery.trim()}
+          >
+            Analyze
+          </button>
+        </div>
+
+        {error && <div className="results-error">{error}</div>}
+
+        {scanData && scanData.title && (
+          <ProductPanel scanData={scanData} />
+        )}
+
+        <MaterialPanel
+          materials={materials}
+          isLoading={loadingMaterials}
+        />
+
+        <ToxicityPanel
+          materials={materials}
+          isLoading={loadingMaterials}
+        />
+
+        <OriginPanel originData={originData} />
+
+        <LifecyclePanel
+          materials={materials}
+          isLoading={loadingMaterials}
+        />
+      </div>
     </div>
   );
 }
