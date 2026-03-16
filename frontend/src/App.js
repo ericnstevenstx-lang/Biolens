@@ -1,5 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import InstallPrompt from "@/components/InstallPrompt";
@@ -24,6 +25,7 @@ function App() {
         <Footer />
         <InstallPrompt />
       </BrowserRouter>
+      <SpeedInsights />
     </div>
   );
 }
