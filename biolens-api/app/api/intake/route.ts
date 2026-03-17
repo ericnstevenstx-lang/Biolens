@@ -24,7 +24,7 @@ function extractDomain(url: string): string { try { return new URL(url).hostname
 function extractFromHtml(html: string, pattern: RegExp): string | undefined { return pattern.exec(html)?.[1]?.replace(/&amp;/g, "&").replace(/&#\d+;/g, "").trim(); }
 function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedProduct {
   const title = extractFromHtml(html, /<span[^>]+id="productTitle"[^>]*>\s*([\s\S]*?)\s*</i);
-  const brand = extractFromHtml(html, /id="bylineInfo"[^>]*>.*?<a[^>]*>([^<]+)</is);
+  const brand = extractFromHtml(html, /id="bylineInfo"[^>]*>[\s\S]*?<a[^>]*>([^<]+)</i);
   const imageUrl = extractFromHtml(html, /id="landingImage"[^>]+src="([^"]+)"/i);
   const countryOfOrigin = extractFromHtml(html, /Country of Origin[^:]*:\s*<[^>]+>\s*([^<\n]{2,60})/i);
   const shipsFrom = extractFromHtml(html, /Ships from[^:]*:\s*<[^>]+>\s*([^<\n]{2,60})/i);
