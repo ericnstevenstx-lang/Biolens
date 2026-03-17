@@ -83,7 +83,7 @@ export async function GET(
     const payload = { barcode, product: intelligence, graph: graphData, cached: false, timestamp: new Date().toISOString() }
 
     const expiresAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
-    supabase.from('neo4j_scan_cache').upsert({ barcode, cache_key: 'scan_v1', payload, expires_at: expiresAt }).then(()=>{}).catch(()=>{})
+    void Promise.resolve(supabase.from('neo4j_scan_cache').upsert({ barcode, cache_key: 'scan_v1', payload, expires_at: expiresAt }))
 
     return NextResponse.json(payload, { headers: CORS })
   } catch (err) {
