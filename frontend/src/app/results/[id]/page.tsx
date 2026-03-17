@@ -10,8 +10,9 @@ interface HealthEffects { hazardSignal?: string; endocrineDisruption?: boolean|n
 interface LifecycleData { score: number; recyclable?: boolean|null; compostable?: boolean|null; landfillPersistenceYears?: number; microplasticRisk?: string; endOfLifePathway?: string; confidence?: string; }
 interface Alternative { id: string; name: string; material?: string; petroloadImprovement: number; microplasticReduction?: number; lifecycleImprovement?: number; confidence?: string; }
 interface CorporateData { brand?: string; brandOwner?: string; manufacturer?: string; distributor?: string; parentCompany?: string; confidence?: string; }
+interface ImpactDelta { petroloadReduction?: number; microplasticReduction?: number; lifecycleImprovement?: number; estimatedJobsSupported?: number; confidence?: string; available?: boolean; }
 interface OriginData { madeIn?: string; shipsFrom?: string; soldBy?: string; manufacturer?: string; importer?: string; disclosureLevel?: string; confidence?: string; flags?: string[]; }
-interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; }
+interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; }
 
 // Safe string coercion - handles objects, null, undefined
 function safeStr(v: unknown): string {
@@ -173,8 +174,9 @@ function ResultsContent({ id }: { id: string }) {
         reveal("origin", 800);
         reveal("lifecycle", 1000);
         reveal("alternatives", 1200);
-        reveal("corporate", 1400);
-        reveal("evidence", 1600);
+            reveal("impactDelta", 1300);
+            reveal("corporate", 1450);
+            reveal("evidence", 1650);
       })
       .catch(err => {
         console.error("BioLens intake error:", err);
@@ -556,7 +558,61 @@ function ResultsContent({ id }: { id: string }) {
 
           </div>
         </div>
-        <div className="h-6"/>
+        
+      {/* IMPACT DELTA */}
+      <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-[#1a2d48] bg-[#0a1520] flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Impact Delta</p>
+          <span className="text-xs text-slate-600">Modeled benefit of switching away from this product</span>
+        </div>
+        <div className="p-5">
+          {r("corporate") && product?.impactDelta?.available ? (() => {
+            const d = product.impactDelta!;
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {d.petroloadReduction !== undefined && (
+                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                    <p className="text-xs text-slate-500 mb-1">Petroload Reduction</p>
+                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.petroloadReduction} pts</p>
+                  </div>
+                )}
+                {d.microplasticReduction !== undefined && (
+                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                    <p className="text-xs text-slate-500 mb-1">Microplastic Reduction</p>
+                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.microplasticReduction}%</p>
+                  </div>
+                )}
+                {d.lifecycleImprovement !== undefined && (
+                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                    <p className="text-xs text-slate-500 mb-1">Lifecycle Improvement</p>
+                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>+{d.lifecycleImprovement} pts</p>
+                  </div>
+                )}
+                {d.estimatedJobsSupported !== undefined && (
+                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                    <p className="text-xs text-slate-500 mb-1">Est. Domestic Jobs</p>
+                    <p className="text-xl font-black text-cyan-400" style={{fontFamily:"var(--font-manrope)"}}>{d.estimatedJobsSupported.toLocaleString()}</p>
+                  </div>
+                )}
+                {d.confidence && (
+                  <div className="col-span-2 sm:col-span-4 flex justify-end pt-1">
+                    <Confidence level={safeStr(d.confidence)}/>
+                  </div>
+                )}
+              </div>
+            );
+          })() : r("corporate") ? (
+            <p className="text-slate-500 text-sm">Switching model not yet calculated for this product class.</p>
+          ) : (
+            <div className="space-y-2.5 animate-pulse">
+              <div className="h-4 w-full rounded bg-slate-800"/>
+              <div className="h-4 w-4/5 rounded bg-slate-800"/>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="h-6"/>
       </div>
     </main>
   );
