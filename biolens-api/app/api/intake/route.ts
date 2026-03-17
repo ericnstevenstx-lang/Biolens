@@ -174,9 +174,20 @@ async function upsertProduct(
 ): Promise<string> {
   const sb = await createSupabaseServerClient();
   const gf = t === "barcode" ? detectGtinType(v) : {};
+
+  // Try to find existing record first (avoids requiring a unique constraint)
+  const { data: existing } = await sb
+    .from("products")
+    .select("id")
+    .eq("canonical_key", ck)
+    .maybeSingle();
+
+  if (existing?.id) return existing.id as string;
+
+  // Insert new record
   const { data, error } = await sb
     .from("products")
-    .upsert({
+    .insert({
       canonical_key: ck,
       product_title: e.title ?? v,
       normalized_title: normalizeTitle(e.title ?? v),
@@ -186,10 +197,11 @@ async function upsertProduct(
       source_id: e.asin ?? (t === "barcode" ? v : null),
       image_url: e.imageUrl ?? null,
       ...gf,
-    }, { onConflict: "canonical_key" })
+    })
     .select("id")
     .single();
-  if (error || !data) throw new Error("Product upsert failed: " + error?.message);
+
+  if (error || !data) throw new Error("Product insert failed: " + error?.message);
   return data.id as string;
 }
 
