@@ -79,6 +79,24 @@ export interface EnrichedIntelligence {
   confidence: string
 }
 
+type SupabaseMaterialRow = {
+  id: string
+  material_name: string
+  normalized_name: string | null
+  petroload_score: number | null
+  bio_based_flag: boolean | null
+  petro_based_flag: boolean | null
+  synthetic_flag: boolean | null
+  default_confidence_score: number | null
+}
+
+type SupabaseAliasRow = {
+  id: string
+  material_id: string
+  alias: string
+  materials: SupabaseMaterialRow | SupabaseMaterialRow[] | null
+}
+
 function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)))
 }
@@ -191,6 +209,10 @@ function buildMaterialCandidates(input: string): string[] {
     'clothing',
     'product',
     'item',
+    'fabric',
+    'fabrics',
+    'textile',
+    'textiles',
   ])
 
   const tokens = normalized
@@ -214,71 +236,130 @@ function buildMaterialCandidates(input: string): string[] {
   return Array.from(candidates)
 }
 
+function rowToGraphMaterial(row: SupabaseMaterialRow): GraphMaterial {
+  const petro = safePetroScore(row.petroload_score)
+
+  return {
+    material: row.material_name,
+    risk: petro != null ? String(petro) : null,
+    toxicity: null,
+    lifecycle: null,
+    bio_pure: row.bio_based_flag ?? null,
+    alternatives: [],
+  }
+}
+
 async function resolveMaterialsFromSupabase(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
 
   try {
     const supabase = await createSupabaseServerClient()
-    const lowerNames = names.map((n) => n.toLowerCase())
-
-    const directMatches = await supabase
-      .from('materials')
-      .select('name, normalized_name, petroload_index, petroload_score, toxicity_score, lifecycle_score, bio_pure_verified')
-      .in('normalized_name', lowerNames)
-
-    const aliasMatches = await supabase
-      .from('material_aliases')
-      .select(`
-        alias,
-        material_id,
-        materials (
-          name,
-          normalized_name,
-          petroload_index,
-          petroload_score,
-          toxicity_score,
-          lifecycle_score,
-          bio_pure_verified
-        )
-      `)
-      .in('alias', lowerNames)
-
     const results = new Map<string, GraphMaterial>()
 
-    if (Array.isArray(directMatches.data)) {
-      for (const row of directMatches.data as any[]) {
-        const petro =
-          safePetroScore(row?.petroload_index) ??
-          safePetroScore(row?.petroload_score)
+    for (const candidate of names) {
+      const normalizedCandidate = normalizeSearchText(candidate)
+      if (!normalizedCandidate) continue
 
-        results.set(row.name, {
-          material: row.name,
-          risk: petro != null ? String(petro) : null,
-          toxicity: row?.toxicity_score != null ? Number(row.toxicity_score) : null,
-          lifecycle: row?.lifecycle_score != null ? Number(row.lifecycle_score) : null,
-          bio_pure: row?.bio_pure_verified ?? null,
-          alternatives: [],
-        })
+      const { data: directNormalized } = await supabase
+        .from('materials')
+        .select(
+          'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
+        )
+        .ilike('normalized_name', normalizedCandidate)
+        .limit(10)
+
+      if (Array.isArray(directNormalized)) {
+        for (const row of directNormalized as SupabaseMaterialRow[]) {
+          results.set(row.material_name, rowToGraphMaterial(row))
+        }
       }
-    }
 
-    if (Array.isArray(aliasMatches.data)) {
-      for (const row of aliasMatches.data as any[]) {
-        const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
-        if (!mat?.name) continue
+      const { data: directName } = await supabase
+        .from('materials')
+        .select(
+          'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
+        )
+        .ilike('material_name', normalizedCandidate)
+        .limit(10)
 
-        const petro =
-          safePetroScore(mat?.petroload_index) ??
-          safePetroScore(mat?.petroload_score)
+      if (Array.isArray(directName)) {
+        for (const row of directName as SupabaseMaterialRow[]) {
+          results.set(row.material_name, rowToGraphMaterial(row))
+        }
+      }
 
-        results.set(mat.name, {
-          material: mat.name,
-          risk: petro != null ? String(petro) : null,
-          toxicity: mat?.toxicity_score != null ? Number(mat.toxicity_score) : null,
-          lifecycle: mat?.lifecycle_score != null ? Number(mat.lifecycle_score) : null,
-          bio_pure: mat?.bio_pure_verified ?? null,
-          alternatives: [],
-        })
+      const { data: partialName } = await supabase
+        .from('materials')
+        .select(
+          'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
+        )
+        .ilike('material_name', `%${normalizedCandidate}%`)
+        .limit(10)
+
+      if (Array.isArray(partialName)) {
+        for (const row of partialName as SupabaseMaterialRow[]) {
+          results.set(row.material_name, rowToGraphMaterial(row))
+        }
+      }
+
+      const { data: aliasMatches } = await supabase
+        .from('material_aliases')
+        .select(
+          `
+          id,
+          material_id,
+          alias,
+          materials (
+            id,
+            material_name,
+            normalized_name,
+            petroload_score,
+            bio_based_flag,
+            petro_based_flag,
+            synthetic_flag,
+            default_confidence_score
+          )
+        `
+        )
+        .ilike('alias', normalizedCandidate)
+        .limit(10)
+
+      if (Array.isArray(aliasMatches)) {
+        for (const row of aliasMatches as SupabaseAliasRow[]) {
+          const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
+          if (!mat?.material_name) continue
+          results.set(mat.material_name, rowToGraphMaterial(mat))
+        }
+      }
+
+      const { data: partialAliasMatches } = await supabase
+        .from('material_aliases')
+        .select(
+          `
+          id,
+          material_id,
+          alias,
+          materials (
+            id,
+            material_name,
+            normalized_name,
+            petroload_score,
+            bio_based_flag,
+            petro_based_flag,
+            synthetic_flag,
+            default_confidence_score
+          )
+        `
+        )
+        .ilike('alias', `%${normalizedCandidate}%`)
+        .limit(10)
+
+      if (Array.isArray(partialAliasMatches)) {
+        for (const row of partialAliasMatches as SupabaseAliasRow[]) {
+          const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
+          if (!mat?.material_name) continue
+          results.set(mat.material_name, rowToGraphMaterial(mat))
+        }
       }
     }
 
@@ -332,10 +413,7 @@ async function enrichMaterialsFromNeo4j(names: string[]): Promise<GraphMaterial[
 export async function enrichByMaterialNames(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
 
-  const expandedNames = Array.from(
-    new Set(names.flatMap((name) => buildMaterialCandidates(name)))
-  )
-
+  const expandedNames = Array.from(new Set(names.flatMap((name) => buildMaterialCandidates(name))))
   if (!expandedNames.length) return []
 
   const supabaseMatches = await resolveMaterialsFromSupabase(expandedNames)
@@ -349,6 +427,7 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
 
   for (const row of neo4jMatches) {
     const existing = merged.get(row.material)
+
     if (!existing) {
       merged.set(row.material, row)
       continue
@@ -381,7 +460,9 @@ export async function enrichByProductId(productId: string): Promise<EnrichedInte
       pi = data as Record<string, unknown>
       const mats = (data as any)?.materials
       if (Array.isArray(mats)) {
-        materialNames = mats.map((m: any) => m?.name).filter(Boolean)
+        materialNames = mats
+          .map((m: any) => m?.name ?? m?.material_name)
+          .filter(Boolean)
       }
     }
   } catch {
@@ -410,7 +491,10 @@ export function normalizeIntelligence(
 
   if (rpcMaterials.length) {
     for (const material of rpcMaterials) {
-      const graphMaterial = graphByName.get(material.name)
+      const materialName = material.name ?? material.material_name
+      if (!materialName) continue
+
+      const graphMaterial = graphByName.get(materialName)
 
       const petro =
         riskToScore(graphMaterial?.risk) ??
@@ -423,7 +507,7 @@ export function normalizeIntelligence(
         (material?.toxicity_score != null ? Number(material.toxicity_score) : null)
 
       materials.push({
-        name: material.name,
+        name: materialName,
         classification: scoreToClassification(petro, graphMaterial?.bio_pure),
         percentage: material.percentage != null ? Number(material.percentage) : undefined,
         healthScore: toxicityToHealthScore(toxicity),
