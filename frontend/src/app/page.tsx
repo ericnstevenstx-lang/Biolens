@@ -1,120 +1,125 @@
-"use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-export default function HomePage() {
-  const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [inputType, setInputType] = useState<"search" | "barcode" | "amazon" | "url">("search");
-  const [loading, setLoading] = useState(false);
+type MaterialCard = {
+  slug: string;
+  name: string;
+  category: string;
+  summary: string;
+  petroload: number | null;
+};
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const q = query.trim();
-    if (!q) return;
-    setLoading(true);
-    const encoded = encodeURIComponent(q);
-    router.push(`/results/${encoded}?type=${inputType}&q=${encoded}`);
+async function getMaterials(): Promise<MaterialCard[]> {
+  try {
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      "http://localhost:3000";
+
+    const res = await fetch(`${baseUrl}/api/materials/browse`, {
+      cache: "no-store",
+    });
+
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    const items = Array.isArray(data?.materials) ? data.materials : [];
+
+    return items.map((item: any) => ({
+      slug: String(item.slug ?? item.normalized_name ?? item.name ?? "").trim(),
+      name: String(item.name ?? "Unknown Material"),
+      category: String(item.material_family ?? item.category ?? "Material"),
+      summary: String(
+        item.consumer_summary ??
+          item.summary ??
+          "Material intelligence profile coming online."
+      ),
+      petroload:
+        typeof item.petroload_index === "number"
+          ? item.petroload_index
+          : typeof item.petroload === "number"
+            ? item.petroload
+            : null,
+    }));
+  } catch {
+    return [];
   }
+}
 
-  const placeholders: Record<string, string> = {
-    search: "Search a product or material — e.g. Tide Pods, polyester, bamboo",
-    barcode: "Enter a barcode number",
-    amazon: "Paste an Amazon product URL",
-    url: "Paste any product page URL",
-  };
+function petroLabel(score: number | null): string {
+  if (score === null) return "Unknown";
+  if (score <= 20) return "Bio-Based";
+  if (score <= 50) return "Bridge";
+  if (score <= 80) return "Synthetic";
+  return "Petrochemical";
+}
+
+export default async function ExplorePage() {
+  const materials = await getMaterials();
 
   return (
-    <main className="min-h-screen bg-[#070b12] text-slate-100 flex flex-col">
-      {/* NAV */}
-      <header className="border-b border-[#1e3a5f] h-12 flex items-center px-6">
-        <span className="text-cyan-400 font-bold text-sm" style={{fontFamily:"var(--font-manrope)"}}>BioLens</span>
-        <span className="ml-3 text-[10px] font-bold uppercase tracking-widest text-slate-600 border border-[#1e3a5f] px-2 py-0.5 rounded">Material Intelligence</span>
-      </header>
-
-      {/* HERO */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
-        <div className="max-w-2xl w-full space-y-8">
-          <div className="space-y-3">
-            <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight" style={{fontFamily:"var(--font-manrope)"}}>
-              What is this product<br/>
-              <span className="text-cyan-400">really made of?</span>
-            </h1>
-            <p className="text-slate-400 text-lg">
-              BioLens analyzes any product across five intelligence layers — materials, health, origin, lifecycle, and alternatives.
-            </p>
+    <main className="min-h-screen bg-[#06131f] text-white">
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <div className="mb-10">
+          <div className="mb-3 text-xs uppercase tracking-[0.28em] text-cyan-300/80">
+            Explore Materials
           </div>
-
-          {/* INPUT TYPE TABS */}
-          <div className="flex justify-center gap-1">
-            {(["search", "barcode", "amazon", "url"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setInputType(t)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  inputType === t
-                    ? "bg-cyan-400 text-[#070b12]"
-                    : "text-slate-400 hover:text-white border border-[#1e3a5f] hover:border-slate-500"
-                }`}
-              >
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-
-          {/* SEARCH FORM */}
-          <form onSubmit={handleSubmit} className="flex gap-2">
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder={placeholders[inputType]}
-              className="flex-1 bg-[#0c1829] border border-[#1e3a5f] rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-cyan-400/50 transition-colors"
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={loading || !query.trim()}
-              className="px-5 py-3 bg-cyan-400 text-[#070b12] rounded-xl text-sm font-bold hover:bg-cyan-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
-              style={{fontFamily:"var(--font-manrope)"}}
-            >
-              {loading ? "..." : "Analyze"}
-            </button>
-          </form>
-
-          {/* EXAMPLE SEARCHES */}
-          <div className="space-y-2">
-            <p className="text-xs text-slate-600 uppercase tracking-wider">Try an example</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {["Tide Pods", "polyester fleece", "PET water bottle", "hemp t-shirt", "HDPE plastic"].map(ex => (
-                <button
-                  key={ex}
-                  onClick={() => { setQuery(ex); setInputType("search"); }}
-                  className="text-xs text-slate-400 hover:text-cyan-400 border border-[#1e3a5f] hover:border-cyan-400/30 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  {ex}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* INTELLIGENCE LAYERS */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-4 border-t border-[#1e3a5f]">
-            {[
-              { label: "Materials", icon: "⬡" },
-              { label: "Health", icon: "⚕" },
-              { label: "Origin", icon: "◎" },
-              { label: "Lifecycle", icon: "↺" },
-              { label: "Alternatives", icon: "→" },
-            ].map(l => (
-              <div key={l.label} className="p-3 bg-[#0c1829] border border-[#1e3a5f] rounded-xl text-center">
-                <p className="text-lg mb-1">{l.icon}</p>
-                <p className="text-xs text-slate-500 font-semibold">{l.label}</p>
-              </div>
-            ))}
-          </div>
+          <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+            Material intelligence library
+          </h1>
+          <p className="mt-4 max-w-3xl text-base text-slate-300 sm:text-lg">
+            Browse the materials BioLens uses to classify petrochemical
+            dependency, replacement potential, and product risk.
+          </p>
         </div>
-      </div>
+
+        {materials.length === 0 ? (
+          <div className="rounded-2xl border border-cyan-500/20 bg-[#0a1b2b] p-8 text-slate-300">
+            No published materials available yet.
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+            {materials.map((material) => (
+              <article
+                key={material.slug || material.name}
+                className="rounded-2xl border border-cyan-500/20 bg-[#0a1b2b] p-6 shadow-[0_0_0_1px_rgba(34,211,238,0.03)]"
+              >
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-[0.2em] text-cyan-200">
+                    {material.category}
+                  </span>
+                  <span className="text-sm text-slate-300">
+                    {petroLabel(material.petroload)}
+                  </span>
+                </div>
+
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  {material.name}
+                </h2>
+
+                <p className="mt-3 line-clamp-4 text-sm leading-6 text-slate-300">
+                  {material.summary}
+                </p>
+
+                <div className="mt-6 flex items-center justify-between">
+                  <div className="text-sm text-slate-400">
+                    Petroload:{" "}
+                    <span className="font-medium text-white">
+                      {material.petroload === null ? "Unknown" : material.petroload}
+                    </span>
+                  </div>
+
+                  <Link
+                    href={`/?q=${encodeURIComponent(material.name)}`}
+                    className="rounded-full border border-cyan-400/20 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-400/10"
+                  >
+                    Analyze
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
