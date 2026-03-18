@@ -119,7 +119,6 @@ function scoreToClassification(
   if (score === null) return 'unknown'
   if (score <= 20) return 'bio'
   if (score <= 50) return 'bridge'
-  if (score <= 80) return 'synthetic'
   return 'synthetic'
 }
 
@@ -159,20 +158,88 @@ function toxicityToHealthScore(value: number | null | undefined): number | undef
   return clampScore((1 - normalized) * 100)
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s/-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildMaterialCandidates(input: string): string[] {
+  const normalized = normalizeSearchText(input)
+  if (!normalized) return []
+
+  const stopwords = new Set([
+    'the',
+    'and',
+    'for',
+    'with',
+    'made',
+    'from',
+    'blend',
+    'shirt',
+    'jacket',
+    'hoodie',
+    'pant',
+    'pants',
+    'sock',
+    'socks',
+    'bag',
+    'tote',
+    'apparel',
+    'clothing',
+    'product',
+    'item',
+  ])
+
+  const tokens = normalized
+    .split(' ')
+    .map((t) => t.trim())
+    .filter(Boolean)
+
+  const filteredTokens = tokens.filter((t) => !stopwords.has(t) && t.length > 2)
+
+  const candidates = new Set<string>()
+  candidates.add(normalized)
+
+  for (const token of filteredTokens) {
+    candidates.add(token)
+  }
+
+  for (let i = 0; i < filteredTokens.length - 1; i++) {
+    candidates.add(`${filteredTokens[i]} ${filteredTokens[i + 1]}`)
+  }
+
+  return Array.from(candidates)
+}
+
 export async function enrichByMaterialNames(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
+
+  const expandedNames = Array.from(new Set(names.flatMap((name) => buildMaterialCandidates(name))))
+  if (!expandedNames.length) return []
 
   try {
     return await withNeo4jSession(async (session) => {
       const result = await session.run(
-        `UNWIND $names AS name
-         MATCH (m:Material {name: name})
-         OPTIONAL MATCH (m)-[:HAS_CURRENT_LEDGER]->(l:MaterialRiskLedger)
-         OPTIONAL MATCH (m)-[:HAS_ALTERNATIVE]->(alt:Alternative)
-         RETURN m.name AS material, l.overall_risk AS risk, l.toxicity_score AS toxicity,
-                l.lifecycle_score AS lifecycle, l.bio_pure_verified AS bio_pure,
-                collect(alt.name)[0..3] AS alternatives`,
-        { names }
+        `
+        UNWIND $names AS name
+        MATCH (m:Material)
+        WHERE toLower(m.name) = name
+           OR toLower(m.name) CONTAINS name
+           OR name CONTAINS toLower(m.name)
+        OPTIONAL MATCH (m)-[:HAS_CURRENT_LEDGER]->(l:MaterialRiskLedger)
+        OPTIONAL MATCH (m)-[:HAS_ALTERNATIVE]->(alt:Alternative)
+        RETURN DISTINCT
+          m.name AS material,
+          l.overall_risk AS risk,
+          l.toxicity_score AS toxicity,
+          l.lifecycle_score AS lifecycle,
+          l.bio_pure_verified AS bio_pure,
+          collect(alt.name)[0..3] AS alternatives
+        `,
+        { names: expandedNames }
       )
 
       return result.records.map((record) => ({
@@ -184,7 +251,8 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
         alternatives: (record.get('alternatives') as string[]) ?? [],
       }))
     })
-  } catch {
+  } catch (err) {
+    console.error('Neo4j material enrichment failed:', err)
     return []
   }
 }
@@ -298,7 +366,9 @@ export function normalizeIntelligence(
   }
 
   let lifecycle: NormalizedLifecycle | null = null
-  const lifecycleScores = graphMaterials.map((g) => g.lifecycle).filter((v): v is number => v != null)
+  const lifecycleScores = graphMaterials
+    .map((g) => g.lifecycle)
+    .filter((v): v is number => v != null)
   const rpcLifecycle = pi?.lifecycle as any
 
   if (lifecycleScores.length || rpcLifecycle) {
@@ -306,10 +376,7 @@ export function normalizeIntelligence(
       ? lifecycleScores.reduce((a, b) => a + b, 0) / lifecycleScores.length
       : null
 
-    const score =
-      toLabelScale(rpcLifecycle?.composite_score) ??
-      toLabelScale(averageLifecycle) ??
-      0
+    const score = toLabelScale(rpcLifecycle?.composite_score) ?? toLabelScale(averageLifecycle) ?? 0
 
     lifecycle = {
       score,
@@ -329,16 +396,14 @@ export function normalizeIntelligence(
   if (rpcAlternatives.length) {
     for (const alt of rpcAlternatives) {
       const altPetro =
-        safePetroScore(alt?.petroload_score) ??
-        safePetroScore(alt?.petroload_index)
+        safePetroScore(alt?.petroload_score) ?? safePetroScore(alt?.petroload_index)
 
       alternatives.push({
         id: String(alt.id ?? alt.material_id ?? alternatives.length),
         name: alt.name ?? alt.alternative_material_name ?? alt.material_name ?? 'Unknown',
         material: alt.material ?? alt.material_class ?? undefined,
         petroloadImprovement:
-          alt.petroload_improvement ??
-          Math.max(0, (petroloadIndex ?? 0) - (altPetro ?? 0)),
+          alt.petroload_improvement ?? Math.max(0, (petroloadIndex ?? 0) - (altPetro ?? 0)),
         microplasticReduction: alt.microplastic_reduction ?? undefined,
         lifecycleImprovement: alt.lifecycle_improvement ?? undefined,
         confidence: alt.confidence ?? 'estimated',
