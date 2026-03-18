@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabase/server'
+ import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { withNeo4jSession } from '@/lib/neo4j/client'
 
 export interface GraphMaterial {
@@ -97,6 +97,19 @@ type SupabaseAliasRow = {
   materials: SupabaseMaterialRow | SupabaseMaterialRow[] | null
 }
 
+type RankedMaterialMatch = {
+  material: GraphMaterial
+  rank: number
+  source:
+    | 'normalized_exact'
+    | 'name_exact'
+    | 'alias_exact'
+    | 'name_prefix'
+    | 'alias_prefix'
+    | 'name_contains'
+    | 'alias_contains'
+}
+
 function clampScore(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)))
 }
@@ -184,6 +197,14 @@ function normalizeSearchText(value: string): string {
     .trim()
 }
 
+function normalizeCompare(value: string | null | undefined): string {
+  return (value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s/-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function buildMaterialCandidates(input: string): string[] {
   const normalized = normalizeSearchText(input)
   if (!normalized) return []
@@ -223,17 +244,19 @@ function buildMaterialCandidates(input: string): string[] {
   const filteredTokens = tokens.filter((t) => !stopwords.has(t) && t.length > 2)
 
   const candidates = new Set<string>()
-  candidates.add(normalized)
+
+  if (normalized) candidates.add(normalized)
 
   for (const token of filteredTokens) {
     candidates.add(token)
   }
 
   for (let i = 0; i < filteredTokens.length - 1; i++) {
-    candidates.add(`${filteredTokens[i]} ${filteredTokens[i + 1]}`)
+    const bigram = `${filteredTokens[i]} ${filteredTokens[i + 1]}`
+    candidates.add(bigram)
   }
 
-  return Array.from(candidates)
+  return Array.from(candidates).slice(0, 6)
 }
 
 function rowToGraphMaterial(row: SupabaseMaterialRow): GraphMaterial {
@@ -249,60 +272,126 @@ function rowToGraphMaterial(row: SupabaseMaterialRow): GraphMaterial {
   }
 }
 
+function scoreMaterialRow(row: SupabaseMaterialRow, candidate: string): RankedMaterialMatch | null {
+  const materialName = normalizeCompare(row.material_name)
+  const normalizedName = normalizeCompare(row.normalized_name)
+  const c = normalizeCompare(candidate)
+
+  if (!c) return null
+
+  let rank = 0
+  let source: RankedMaterialMatch['source'] | null = null
+
+  if (normalizedName && normalizedName === c) {
+    rank = 100
+    source = 'normalized_exact'
+  } else if (materialName === c) {
+    rank = 95
+    source = 'name_exact'
+  } else if (normalizedName && normalizedName.startsWith(c)) {
+    rank = 80
+    source = 'name_prefix'
+  } else if (materialName.startsWith(c)) {
+    rank = 76
+    source = 'name_prefix'
+  } else if (normalizedName && normalizedName.includes(c)) {
+    rank = 60
+    source = 'name_contains'
+  } else if (materialName.includes(c)) {
+    rank = 55
+    source = 'name_contains'
+  } else {
+    return null
+  }
+
+  if (c.length <= 4 && rank < 90) {
+    rank -= 10
+  }
+
+  return {
+    material: rowToGraphMaterial(row),
+    rank,
+    source,
+  }
+}
+
+function scoreAliasRow(row: SupabaseAliasRow, candidate: string): RankedMaterialMatch | null {
+  const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
+  if (!mat?.material_name) return null
+
+  const alias = normalizeCompare(row.alias)
+  const c = normalizeCompare(candidate)
+
+  if (!c || !alias) return null
+
+  let rank = 0
+  let source: RankedMaterialMatch['source'] | null = null
+
+  if (alias === c) {
+    rank = 92
+    source = 'alias_exact'
+  } else if (alias.startsWith(c)) {
+    rank = 72
+    source = 'alias_prefix'
+  } else if (alias.includes(c)) {
+    rank = 52
+    source = 'alias_contains'
+  } else {
+    return null
+  }
+
+  if (c.length <= 4 && rank < 90) {
+    rank -= 10
+  }
+
+  return {
+    material: rowToGraphMaterial(mat),
+    rank,
+    source,
+  }
+}
+
 async function resolveMaterialsFromSupabase(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
 
   try {
     const supabase = await createSupabaseServerClient()
-    const results = new Map<string, GraphMaterial>()
+    const ranked = new Map<string, RankedMaterialMatch>()
 
     for (const candidate of names) {
       const normalizedCandidate = normalizeSearchText(candidate)
       if (!normalizedCandidate) continue
 
-      const { data: directNormalized } = await supabase
+      const { data: materialRows } = await supabase
         .from('materials')
         .select(
           'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
         )
-        .ilike('normalized_name', normalizedCandidate)
-        .limit(10)
-
-      if (Array.isArray(directNormalized)) {
-        for (const row of directNormalized as SupabaseMaterialRow[]) {
-          results.set(row.material_name, rowToGraphMaterial(row))
-        }
-      }
-
-      const { data: directName } = await supabase
-        .from('materials')
-        .select(
-          'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
+        .or(
+          [
+            `normalized_name.ilike.${normalizedCandidate}`,
+            `material_name.ilike.${normalizedCandidate}`,
+            `normalized_name.ilike.${normalizedCandidate}%`,
+            `material_name.ilike.${normalizedCandidate}%`,
+            `normalized_name.ilike.%${normalizedCandidate}%`,
+            `material_name.ilike.%${normalizedCandidate}%`,
+          ].join(',')
         )
-        .ilike('material_name', normalizedCandidate)
-        .limit(10)
+        .limit(20)
 
-      if (Array.isArray(directName)) {
-        for (const row of directName as SupabaseMaterialRow[]) {
-          results.set(row.material_name, rowToGraphMaterial(row))
+      if (Array.isArray(materialRows)) {
+        for (const row of materialRows as SupabaseMaterialRow[]) {
+          const scored = scoreMaterialRow(row, normalizedCandidate)
+          if (!scored) continue
+
+          const existing = ranked.get(scored.material.material)
+          if (!existing || scored.rank > existing.rank) {
+            ranked.set(scored.material.material, scored)
+          }
         }
       }
 
-      const { data: partialName } = await supabase
-        .from('materials')
-        .select(
-          'id, material_name, normalized_name, petroload_score, bio_based_flag, petro_based_flag, synthetic_flag, default_confidence_score'
-        )
-        .ilike('material_name', `%${normalizedCandidate}%`)
-        .limit(10)
-
-      if (Array.isArray(partialName)) {
-        for (const row of partialName as SupabaseMaterialRow[]) {
-          results.set(row.material_name, rowToGraphMaterial(row))
-        }
-      }
-
-      const { data: aliasMatches } = await supabase
+      const { data: aliasRows } = await supabase
         .from('material_aliases')
         .select(
           `
@@ -321,49 +410,39 @@ async function resolveMaterialsFromSupabase(names: string[]): Promise<GraphMater
           )
         `
         )
-        .ilike('alias', normalizedCandidate)
-        .limit(10)
-
-      if (Array.isArray(aliasMatches)) {
-        for (const row of aliasMatches as SupabaseAliasRow[]) {
-          const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
-          if (!mat?.material_name) continue
-          results.set(mat.material_name, rowToGraphMaterial(mat))
-        }
-      }
-
-      const { data: partialAliasMatches } = await supabase
-        .from('material_aliases')
-        .select(
-          `
-          id,
-          material_id,
-          alias,
-          materials (
-            id,
-            material_name,
-            normalized_name,
-            petroload_score,
-            bio_based_flag,
-            petro_based_flag,
-            synthetic_flag,
-            default_confidence_score
-          )
-        `
+        .or(
+          [
+            `alias.ilike.${normalizedCandidate}`,
+            `alias.ilike.${normalizedCandidate}%`,
+            `alias.ilike.%${normalizedCandidate}%`,
+          ].join(',')
         )
-        .ilike('alias', `%${normalizedCandidate}%`)
-        .limit(10)
+        .limit(20)
 
-      if (Array.isArray(partialAliasMatches)) {
-        for (const row of partialAliasMatches as SupabaseAliasRow[]) {
-          const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
-          if (!mat?.material_name) continue
-          results.set(mat.material_name, rowToGraphMaterial(mat))
+      if (Array.isArray(aliasRows)) {
+        for (const row of aliasRows as SupabaseAliasRow[]) {
+          const scored = scoreAliasRow(row, normalizedCandidate)
+          if (!scored) continue
+
+          const existing = ranked.get(scored.material.material)
+          if (!existing || scored.rank > existing.rank) {
+            ranked.set(scored.material.material, scored)
+          }
         }
       }
     }
 
-    return Array.from(results.values())
+    const sorted = Array.from(ranked.values()).sort((a, b) => b.rank - a.rank)
+    const topRank = sorted[0]?.rank ?? 0
+
+    const filtered = sorted.filter((item) => {
+      if (item.rank >= 90) return true
+      if (item.rank >= 75 && item.rank >= topRank - 12) return true
+      if (item.rank >= 60 && item.rank >= topRank - 5 && sorted.length <= 3) return true
+      return false
+    })
+
+    return filtered.slice(0, 5).map((item) => item.material)
   } catch (err) {
     console.error('Supabase material resolution failed:', err)
     return []
