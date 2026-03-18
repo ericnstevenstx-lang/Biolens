@@ -214,11 +214,83 @@ function buildMaterialCandidates(input: string): string[] {
   return Array.from(candidates)
 }
 
-export async function enrichByMaterialNames(names: string[]): Promise<GraphMaterial[]> {
+async function resolveMaterialsFromSupabase(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
 
-  const expandedNames = Array.from(new Set(names.flatMap((name) => buildMaterialCandidates(name))))
-  if (!expandedNames.length) return []
+  try {
+    const supabase = await createSupabaseServerClient()
+    const lowerNames = names.map((n) => n.toLowerCase())
+
+    const directMatches = await supabase
+      .from('materials')
+      .select('name, normalized_name, petroload_index, petroload_score, toxicity_score, lifecycle_score, bio_pure_verified')
+      .in('normalized_name', lowerNames)
+
+    const aliasMatches = await supabase
+      .from('material_aliases')
+      .select(`
+        alias,
+        material_id,
+        materials (
+          name,
+          normalized_name,
+          petroload_index,
+          petroload_score,
+          toxicity_score,
+          lifecycle_score,
+          bio_pure_verified
+        )
+      `)
+      .in('alias', lowerNames)
+
+    const results = new Map<string, GraphMaterial>()
+
+    if (Array.isArray(directMatches.data)) {
+      for (const row of directMatches.data as any[]) {
+        const petro =
+          safePetroScore(row?.petroload_index) ??
+          safePetroScore(row?.petroload_score)
+
+        results.set(row.name, {
+          material: row.name,
+          risk: petro != null ? String(petro) : null,
+          toxicity: row?.toxicity_score != null ? Number(row.toxicity_score) : null,
+          lifecycle: row?.lifecycle_score != null ? Number(row.lifecycle_score) : null,
+          bio_pure: row?.bio_pure_verified ?? null,
+          alternatives: [],
+        })
+      }
+    }
+
+    if (Array.isArray(aliasMatches.data)) {
+      for (const row of aliasMatches.data as any[]) {
+        const mat = Array.isArray(row.materials) ? row.materials[0] : row.materials
+        if (!mat?.name) continue
+
+        const petro =
+          safePetroScore(mat?.petroload_index) ??
+          safePetroScore(mat?.petroload_score)
+
+        results.set(mat.name, {
+          material: mat.name,
+          risk: petro != null ? String(petro) : null,
+          toxicity: mat?.toxicity_score != null ? Number(mat.toxicity_score) : null,
+          lifecycle: mat?.lifecycle_score != null ? Number(mat.lifecycle_score) : null,
+          bio_pure: mat?.bio_pure_verified ?? null,
+          alternatives: [],
+        })
+      }
+    }
+
+    return Array.from(results.values())
+  } catch (err) {
+    console.error('Supabase material resolution failed:', err)
+    return []
+  }
+}
+
+async function enrichMaterialsFromNeo4j(names: string[]): Promise<GraphMaterial[]> {
+  if (!names.length) return []
 
   try {
     return await withNeo4jSession(async (session) => {
@@ -239,7 +311,7 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
           l.bio_pure_verified AS bio_pure,
           collect(alt.name)[0..3] AS alternatives
         `,
-        { names: expandedNames }
+        { names }
       )
 
       return result.records.map((record) => ({
@@ -255,6 +327,44 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
     console.error('Neo4j material enrichment failed:', err)
     return []
   }
+}
+
+export async function enrichByMaterialNames(names: string[]): Promise<GraphMaterial[]> {
+  if (!names.length) return []
+
+  const expandedNames = Array.from(
+    new Set(names.flatMap((name) => buildMaterialCandidates(name)))
+  )
+
+  if (!expandedNames.length) return []
+
+  const supabaseMatches = await resolveMaterialsFromSupabase(expandedNames)
+  const neo4jMatches = await enrichMaterialsFromNeo4j(expandedNames)
+
+  const merged = new Map<string, GraphMaterial>()
+
+  for (const row of supabaseMatches) {
+    merged.set(row.material, row)
+  }
+
+  for (const row of neo4jMatches) {
+    const existing = merged.get(row.material)
+    if (!existing) {
+      merged.set(row.material, row)
+      continue
+    }
+
+    merged.set(row.material, {
+      material: row.material,
+      risk: existing.risk ?? row.risk,
+      toxicity: existing.toxicity ?? row.toxicity,
+      lifecycle: existing.lifecycle ?? row.lifecycle,
+      bio_pure: existing.bio_pure ?? row.bio_pure,
+      alternatives: existing.alternatives.length ? existing.alternatives : row.alternatives,
+    })
+  }
+
+  return Array.from(merged.values())
 }
 
 export async function enrichByProductId(productId: string): Promise<EnrichedIntelligence> {
@@ -376,7 +486,10 @@ export function normalizeIntelligence(
       ? lifecycleScores.reduce((a, b) => a + b, 0) / lifecycleScores.length
       : null
 
-    const score = toLabelScale(rpcLifecycle?.composite_score) ?? toLabelScale(averageLifecycle) ?? 0
+    const score =
+      toLabelScale(rpcLifecycle?.composite_score) ??
+      toLabelScale(averageLifecycle) ??
+      0
 
     lifecycle = {
       score,
@@ -396,14 +509,16 @@ export function normalizeIntelligence(
   if (rpcAlternatives.length) {
     for (const alt of rpcAlternatives) {
       const altPetro =
-        safePetroScore(alt?.petroload_score) ?? safePetroScore(alt?.petroload_index)
+        safePetroScore(alt?.petroload_score) ??
+        safePetroScore(alt?.petroload_index)
 
       alternatives.push({
         id: String(alt.id ?? alt.material_id ?? alternatives.length),
         name: alt.name ?? alt.alternative_material_name ?? alt.material_name ?? 'Unknown',
         material: alt.material ?? alt.material_class ?? undefined,
         petroloadImprovement:
-          alt.petroload_improvement ?? Math.max(0, (petroloadIndex ?? 0) - (altPetro ?? 0)),
+          alt.petroload_improvement ??
+          Math.max(0, (petroloadIndex ?? 0) - (altPetro ?? 0)),
         microplasticReduction: alt.microplastic_reduction ?? undefined,
         lifecycleImprovement: alt.lifecycle_improvement ?? undefined,
         confidence: alt.confidence ?? 'estimated',
