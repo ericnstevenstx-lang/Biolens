@@ -78,8 +78,19 @@ function mapSourceType(url: string): "retailer" | "marketplace" | "brand_site" |
   return "other";
 }
 
-function safeConfidenceValue(): "medium" {
-  return "medium";
+function safeConfidenceValue(
+  sourceType: "retailer" | "marketplace" | "brand_site" | "other"
+): "verified" | "inferred" | "estimated" | "unknown" {
+  switch (sourceType) {
+    case "retailer":
+      return "inferred";
+    case "brand_site":
+      return "inferred";
+    case "marketplace":
+      return "estimated";
+    default:
+      return "unknown";
+  }
 }
 
 function assertPayload(body: unknown): Payload {
@@ -297,7 +308,7 @@ export async function POST(req: Request): Promise<Response> {
                 manufacturing_country: norm(r.manufacturing_country) ?? norm(r.country_of_origin),
                 made_in_claim: norm(r.country_of_origin),
                 disclosure_level: "partial",
-                confidence: safeConfidenceValue(),
+                confidence: safeConfidenceValue(sourceType),
                 is_origin_disclosed: !!(r.country_of_origin || r.manufacturing_country),
                 is_marketplace_listing: sourceType === "marketplace",
               });
