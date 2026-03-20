@@ -142,6 +142,19 @@ function mapSourceType(url: string | null | undefined): string {
   return "other";
 }
 
+function mapCanonicalSourceType(sourceType: string): string {
+  switch (sourceType) {
+    case "retailer":
+      return "retailer";
+    case "marketplace":
+      return "marketplace";
+    case "manufacturer":
+      return "brand_site";
+    default:
+      return "other";
+  }
+}
+
 function makeDedupeHash(result: GensparkResult): string {
   const identity = [
     normalizeKeyText(result.gtin) ?? "",
@@ -526,12 +539,7 @@ export async function POST(req: Request): Promise<Response> {
               .insert({
                 source_url: sourceUrl,
                 source_domain: sourceDomain,
-                source_type:
-                  sourceType === "retailer" ||
-                  sourceType === "marketplace" ||
-                  sourceType === "manufacturer"
-                    ? sourceType
-                    : "other",
+                source_type: mapCanonicalSourceType(sourceType),
                 extraction_method: "genspark_ingest",
                 reliability_score:
                   sourceType === "manufacturer"
