@@ -1,0 +1,24 @@
+{
+  "query": "test product search",
+  "source": "genspark",
+  "results": [
+    {
+      "source_url": "https://example.com/product/123",
+      "retailer_name": "Amazon",
+      "brand_name": "Bedsure",
+      "product_title": "Bedsure Fleece Blanket Queen Size",
+      "gtin": "9123456789012",
+      "upc": null,
+      "ean": null,
+      "description_text": "Soft microfiber polyester blanket",
+      "materials_text": "100% polyester",
+      "country_of_origin": "China",
+      "manufacturing_country": "China",
+      "brand_country": "USA",
+      "claims": [],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {}
+    }
+  ]
+}
