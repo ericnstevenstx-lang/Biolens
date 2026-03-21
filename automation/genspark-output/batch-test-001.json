@@ -1,0 +1,24 @@
+{
+  "query": "test automation trigger",
+  "source": "genspark",
+  "results": [
+    {
+      "source_url": "https://example.com/product/auto-" ,
+      "retailer_name": "Amazon",
+      "brand_name": "TestBrand",
+      "product_title": "Automation Test Product",
+      "gtin": "9123456789012",
+      "upc": null,
+      "ean": null,
+      "description_text": "Automation test",
+      "materials_text": "100% polyester",
+      "country_of_origin": "China",
+      "manufacturing_country": "China",
+      "brand_country": "USA",
+      "claims": [],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {}
+    }
+  ]
+}
