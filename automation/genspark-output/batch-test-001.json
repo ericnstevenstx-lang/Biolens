@@ -1,24 +1,212 @@
 {
-  "query": "test automation trigger",
+  "query": "polyester fleece blanket",
   "source": "genspark",
   "results": [
     {
-      "source_url": "https://example.com/product/auto-" ,
-      "retailer_name": "Amazon",
-      "brand_name": "TestBrand",
-      "product_title": "Automation Test Product",
-      "gtin": "9123456789012",
+      "source_url": "https://sobelathome.com/products/sobellux-hotel-ultra-soft-fleece-blanket-ice",
+      "retailer_name": "Sobel at Home",
+      "brand_name": "Sobellux",
+      "product_title": "Sobellux Hotel Ultra Soft Premium Fleece Blanket - Ice (Light Blue)",
+      "gtin": null,
       "upc": null,
       "ean": null,
-      "description_text": "Automation test",
-      "materials_text": "100% polyester",
-      "country_of_origin": "China",
-      "manufacturing_country": "China",
-      "brand_country": "USA",
-      "claims": [],
+      "description_text": "Banish the cold nights chill with our ultra-soft fleece blanket. Perfect by itself or over a comforter to create the ultimate cozy bed. A sturdy double-frame construction and pilling-free fabric mean you'll enjoy the beauty and warmth for a long time to come.",
+      "materials_text": "100% spun polyester fleece",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Pilling-free fabric",
+        "Sturdy double-frame construction",
+        "Double thick construction"
+      ],
       "certifications": [],
       "image_url": "",
-      "raw_payload": {}
+      "raw_payload": {
+        "sku": "3509090.BLU",
+        "price": "$75.00",
+        "construction": "Double-frame",
+        "care": "Machine wash cold on gentle cycle; no bleach or softeners; do not exceed 120F drying"
+      }
+    },
+    {
+      "source_url": "https://thelinenfactory.com/products/300-gsm-100-polyester-polar-fleece-blanket-soft-warm-durable",
+      "retailer_name": "The Linen Factory",
+      "brand_name": "Paradise Pillow Inc.",
+      "product_title": "300 GSM 100% Polyester Polar Fleece Blanket - Soft, Warm & Durable",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "Designed for durability and ease of care, our 100% Polyester Polar Fleece Blanket is an ideal choice for hospitality settings. This lightweight yet warm blanket ensures guest comfort and simplifies housekeeping routines with its quick-drying and wrinkle-resistant properties.",
+      "materials_text": "100% polyester polar fleece, 300 GSM",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Quick-drying",
+        "Wrinkle-resistant",
+        "Long-lasting softness withstands frequent washing"
+      ],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {
+        "sku": "60401",
+        "price_range": "$96.00-$184.80 per case",
+        "weight": "300 GSM",
+        "sizes": ["45x60 case/24", "54x90 case/6", "66x90 case/6", "81x90 case/6", "90x90 case/6", "102x90 case/6"],
+        "colors": ["Gray", "Navy Blue", "Silver", "Brown", "Beige"],
+        "care": "Machine washable; dryer safe"
+      }
+    },
+    {
+      "source_url": "https://treeenterprises.com/product/polyester-fleece-blankets/",
+      "retailer_name": "Tree Enterprises",
+      "brand_name": "Tree Enterprises",
+      "product_title": "Polyester Fleece Blankets",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "These great blankets are 100% polyester fleece and meet 16CFR Part 1610 class 1 clothing flammability requirements. This warm and soft blanket comes in 6 great coordinating colors and solid white.",
+      "materials_text": "100% polyester fleece",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Meets 16CFR Part 1610 Class 1 clothing flammability requirements"
+      ],
+      "certifications": [
+        "16CFR Part 1610 Class 1 Flammability"
+      ],
+      "image_url": "",
+      "raw_payload": {
+        "price": "$11.00",
+        "colors": "6 coordinating colors plus solid white",
+        "flammability_standard": "16CFR Part 1610 Class 1"
+      }
+    },
+    {
+      "source_url": "https://directtextilestore.com/fold-free-polyester-fleece-blanket-bulk-case-of-12",
+      "retailer_name": "Direct Textile Store",
+      "brand_name": "Still Water Linens Healthcare",
+      "product_title": "Fold Free Polyester Fleece Blanket - Bulk Case of 12",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "Fold Free Polyester Fleece Blankets designed for warmth and comfort in healthcare, hospital, and shelter settings. Ideal for patients or general use in healthcare and shelter environments. Crafted from spun polyester, sized at 60x90 inches, available in Blue, Navy, Tan, and White.",
+      "materials_text": "Spun polyester fleece",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Fold-free design",
+        "Ships within 24 hours"
+      ],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {
+        "manufacturer": "Still Water Linens Healthcare",
+        "availability": "Ships 24 Hours or Less",
+        "size": "60x90 inches",
+        "colors": ["Blue", "Navy", "Tan", "White"],
+        "sold_as": "Bulk case of 12",
+        "market": "Healthcare / Hospital / Shelter"
+      }
+    },
+    {
+      "source_url": "https://dzeeusa.com/micro-fleece-blanket-opal-economy.html",
+      "retailer_name": "Dzee USA",
+      "brand_name": "Dzee",
+      "product_title": "Opal Economy Microfleece Blanket - 100% Polyester Lightweight",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "The Opal Economy Microfleece Blanket is designed with 100% polyester fleece for lightweight comfort and cost-effective hospitality bedding. Available in Twin, Full, and King sizes. Ideal for AC rooms, warmer climates, or year-round layering.",
+      "materials_text": "100% polyester microfleece",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Anti-pilling",
+        "Hypoallergenic",
+        "Breathable",
+        "Machine washable",
+        "Quick drying"
+      ],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {
+        "color": "Tan",
+        "sizes": {
+          "Twin": {"dimensions": "60x90 in", "weight_oz": 25},
+          "Full": {"dimensions": "90x90 in", "weight_oz": 34},
+          "King": {"dimensions": "110x90 in", "weight_oz": 40}
+        },
+        "market": "Hospitality / Hotels / Motels",
+        "ships_from": ["Florida", "Tennessee", "Nevada"]
+      }
+    },
+    {
+      "source_url": "https://www.anypromo.com/outdoor-leisure/blankets-linens/polyester-fleece-blanket-p736752",
+      "retailer_name": "AnyPromo",
+      "brand_name": "AnyPromo",
+      "product_title": "Promotional Polyester Fleece Blanket - Custom Embroidered",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "100% Polyester fleece blanket with matching color whip-stitched border at 260 GSM (13 oz). Customizable via embroidery imprint up to 5\" W x 5\" H with up to 7 colors. Machine wash cold; hang dry.",
+      "materials_text": "100% polyester fleece, 260 GSM (13 oz)",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Matching color whip-stitched border",
+        "110% Price Match Guarantee"
+      ],
+      "certifications": [],
+      "image_url": "https://img66.anypromo.com/product2/original/5272427/custom-polyester-fleece-blanket.jpg/v15",
+      "raw_payload": {
+        "item_number": "736752",
+        "weight": "260 GSM / 13 oz",
+        "imprint_method": "Embroidery",
+        "imprint_size": "5\" W x 5\" H",
+        "max_imprint_colors": 7,
+        "moq": 12,
+        "price_starting_at": "$16.14",
+        "colors": ["Black", "Charcoal Gray", "Gray", "Navy Blue", "Reflex Blue"],
+        "care": "Machine wash cold; hang dry"
+      }
+    },
+    {
+      "source_url": "https://www.lodgmate.com/product/fb66t_c/hotel-blankets",
+      "retailer_name": "LodgMate",
+      "brand_name": "LodgMate",
+      "product_title": "Polar Fleece 100% Polyester Hotel Blankets",
+      "gtin": null,
+      "upc": null,
+      "ean": null,
+      "description_text": "100% polyester polar fleece hotel blanket with non-pill finish and self-hem double-needle stitching for maximum durability. Coarser finish than micro-fleece at a more economical price. Available in Twin, Full, Queen, and King sizes. Sold in full cartons only.",
+      "materials_text": "100% polyester polar fleece",
+      "country_of_origin": "",
+      "manufacturing_country": "",
+      "brand_country": "United States",
+      "claims": [
+        "Non-pill finish",
+        "Self-hem double-needle stitching",
+        "Economical alternative to micro-fleece"
+      ],
+      "certifications": [],
+      "image_url": "",
+      "raw_payload": {
+        "skus": {
+          "FB66T": {"size": "Twin 66x90", "price": "$19.95 ea.", "carton_qty": 6},
+          "FB80F": {"size": "Full 80x90", "price": "$22.95 ea.", "carton_qty": 5},
+          "FB90Q": {"size": "Queen 90x90", "price": "$24.95 ea.", "carton_qty": 5},
+          "FB108K": {"size": "King 108x90", "price": "$29.95 ea.", "carton_qty": 4}
+        },
+        "colors": ["Ivory", "Tan", "Blue"],
+        "sold_as": "Full cartons only",
+        "market": "Hotel / Hospitality"
+      }
     }
   ]
 }
