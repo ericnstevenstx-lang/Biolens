@@ -1,0 +1,32 @@
+name: Ingest Genspark Batch
+
+on:
+  push:
+    paths:
+      - 'automation/genspark-output/*.json'
+    branches:
+      - main
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Find latest JSON batch
+        id: batch
+        run: |
+          FILE=$(ls -t automation/genspark-output/*.json | head -n 1)
+          echo "file=$FILE" >> $GITHUB_OUTPUT
+
+      - name: Show selected batch
+        run: echo "Using batch file ${{ steps.batch.outputs.file }}"
+
+      - name: POST batch to BioLens API
+        run: |
+          curl -X POST \
+            "https://biolens-kappa.vercel.app/api/product-search-ingest" \
+            -H "Content-Type: application/json" \
+            --data-binary "@${{ steps.batch.outputs.file }}"
