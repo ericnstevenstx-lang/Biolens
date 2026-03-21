@@ -1,14 +1,96 @@
 {
   "queries": [
     { "id": "batch-001", "query": "polyester fleece blanket" },
-    { "id": "batch-002", "query": "plastic food storage container" },
-    { "id": "batch-003", "query": "bamboo cutting board" },
-    { "id": "batch-004", "query": "stainless steel water bottle" },
-    { "id": "batch-005", "query": "polyester t-shirt" },
-    { "id": "batch-006", "query": "bamboo toothbrush" },
-    { "id": "batch-007", "query": "shampoo bottle plastic" },
-    { "id": "batch-008", "query": "vinyl flooring plank" },
-    { "id": "batch-009", "query": "microfiber mop head" },
-    { "id": "batch-010", "query": "polypropylene baby bottle" }
+    { "id": "batch-002", "query": "microfiber comforter" },
+    { "id": "batch-003", "query": "polyester throw blanket" },
+    { "id": "batch-004", "query": "bamboo bed sheets" },
+    { "id": "batch-005", "query": "cotton bed sheet set" },
+
+    { "id": "batch-006", "query": "plastic food storage container" },
+    { "id": "batch-007", "query": "glass meal prep container" },
+    { "id": "batch-008", "query": "bamboo cutting board" },
+    { "id": "batch-009", "query": "silicone kitchen utensils" },
+    { "id": "batch-010", "query": "nonstick frying pan coating" },
+
+    { "id": "batch-011", "query": "stainless steel water bottle" },
+    { "id": "batch-012", "query": "plastic reusable water bottle" },
+    { "id": "batch-013", "query": "coffee mug ceramic" },
+    { "id": "batch-014", "query": "melamine dinner plate" },
+    { "id": "batch-015", "query": "paper disposable cups lining" },
+
+    { "id": "batch-016", "query": "shampoo bottle plastic" },
+    { "id": "batch-017", "query": "conditioner bottle plastic" },
+    { "id": "batch-018", "query": "body wash packaging plastic" },
+    { "id": "batch-019", "query": "deodorant container materials" },
+    { "id": "batch-020", "query": "cosmetic packaging plastic jar" },
+
+    { "id": "batch-021", "query": "bamboo toothbrush" },
+    { "id": "batch-022", "query": "electric toothbrush plastic" },
+    { "id": "batch-023", "query": "disposable razor plastic" },
+    { "id": "batch-024", "query": "refillable soap dispenser" },
+    { "id": "batch-025", "query": "hairbrush plastic vs bamboo" },
+
+    { "id": "batch-026", "query": "laundry detergent bottle" },
+    { "id": "batch-027", "query": "cleaning spray bottle plastic" },
+    { "id": "batch-028", "query": "trash bags polyethylene" },
+    { "id": "batch-029", "query": "microfiber mop head" },
+    { "id": "batch-030", "query": "cleaning wipes plastic container" },
+
+    { "id": "batch-031", "query": "polyester t-shirt" },
+    { "id": "batch-032", "query": "cotton t-shirt" },
+    { "id": "batch-033", "query": "bamboo socks" },
+    { "id": "batch-034", "query": "leggings polyester spandex" },
+    { "id": "batch-035", "query": "hoodie fleece polyester" },
+
+    { "id": "batch-036", "query": "rain jacket nylon" },
+    { "id": "batch-037", "query": "sports bra synthetic fabric" },
+    { "id": "batch-038", "query": "underwear cotton vs polyester" },
+    { "id": "batch-039", "query": "fast fashion polyester dress" },
+    { "id": "batch-040", "query": "denim jeans cotton blend" },
+
+    { "id": "batch-041", "query": "baby bottle polypropylene" },
+    { "id": "batch-042", "query": "baby wipes plastic packaging" },
+    { "id": "batch-043", "query": "diaper materials disposable" },
+    { "id": "batch-044", "query": "kids lunch box plastic" },
+    { "id": "batch-045", "query": "crib mattress protector waterproof" },
+
+    { "id": "batch-046", "query": "vinyl flooring plank PVC" },
+    { "id": "batch-047", "query": "shower curtain polyester" },
+    { "id": "batch-048", "query": "polypropylene rug" },
+    { "id": "batch-049", "query": "plastic storage bin" },
+    { "id": "batch-050", "query": "laundry basket plastic" }
+    { "id": "batch-051", "query": "facial moisturizer ingredients list" },
+    { "id": "batch-052", "query": "anti aging cream retinol formulation" },
+    { "id": "batch-053", "query": "foundation makeup ingredients list" },
+    { "id": "batch-054", "query": "lipstick ingredients composition" },
+    { "id": "batch-055", "query": "mascara waterproof ingredients" },
+    { "id": "batch-056", "query": "sunscreen SPF chemical vs mineral ingredients" },
+    { "id": "batch-057", "query": "face wash cleanser ingredients sulfate free" },
+    { "id": "batch-058", "query": "body lotion ingredients parabens phthalates" },
+    { "id": "batch-059", "query": "hand sanitizer ingredients alcohol gel" },
+    { "id": "batch-060", "query": "deodorant aluminum free ingredients" },
+
+    { "id": "batch-061", "query": "hair dye ingredients ammonia free" },
+    { "id": "batch-062", "query": "hair styling gel ingredients polymer" },
+    { "id": "batch-063", "query": "nail polish ingredients chemical composition" },
+    { "id": "batch-064", "query": "perfume ingredients fragrance composition" },
+    { "id": "batch-065", "query": "cosmetic serum hyaluronic acid ingredients" }
+    { "id": "batch-066", "query": "packaged snacks ingredients list preservatives" },
+    { "id": "batch-067", "query": "cereal ingredients list fortified grains additives" },
+    { "id": "batch-068", "query": "protein bars ingredients label composition" },
+    { "id": "batch-069", "query": "soft drinks ingredients high fructose corn syrup" },
+    { "id": "batch-070", "query": "bottled water packaging plastic PET" },
+
+    { "id": "batch-071", "query": "baby food ingredients organic vs conventional" },
+    { "id": "batch-072", "query": "frozen meals ingredients preservatives additives" },
+    { "id": "batch-073", "query": "fast food packaging materials plastic paper coating" },
+    { "id": "batch-074", "query": "takeout containers materials styrofoam vs plastic" },
+    { "id": "batch-075", "query": "coffee pods materials plastic aluminum" },
+
+    { "id": "batch-076", "query": "tea bags materials microplastics nylon" },
+    { "id": "batch-077", "query": "cooking oil plastic bottle vs glass packaging" },
+    { "id": "batch-078", "query": "milk packaging carton plastic lining" },
+    { "id": "batch-079", "query": "cheese packaging plastic film composition" },
+    { "id": "batch-080", "query": "frozen food packaging plastic laminate materials" }
   ]
 }
