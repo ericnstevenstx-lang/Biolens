@@ -1,0 +1,14 @@
+{
+  "queries": [
+    { "id": "batch-001", "query": "polyester fleece blanket" },
+    { "id": "batch-002", "query": "plastic food storage container" },
+    { "id": "batch-003", "query": "bamboo cutting board" },
+    { "id": "batch-004", "query": "stainless steel water bottle" },
+    { "id": "batch-005", "query": "polyester t-shirt" },
+    { "id": "batch-006", "query": "bamboo toothbrush" },
+    { "id": "batch-007", "query": "shampoo bottle plastic" },
+    { "id": "batch-008", "query": "vinyl flooring plank" },
+    { "id": "batch-009", "query": "microfiber mop head" },
+    { "id": "batch-010", "query": "polypropylene baby bottle" }
+  ]
+}
