@@ -1,4 +1,4 @@
-name: Ingest Genspark Batch
+name: Ingest Genspark Batches
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
       - 'automation/genspark-output/*.json'
     branches:
       - main
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'
 
 jobs:
   ingest:
@@ -15,18 +18,19 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Find latest JSON batch
-        id: batch
+      - name: Ingest all batch files
         run: |
-          FILE=$(ls -t automation/genspark-output/*.json | head -n 1)
-          echo "file=$FILE" >> $GITHUB_OUTPUT
+          shopt -s nullglob
+          for file in automation/genspark-output/*.json; do
+            base=$(basename "$file")
+            if [ "$base" = "query-manifest.json" ]; then
+              continue
+            fi
 
-      - name: Show selected batch
-        run: echo "Using batch file ${{ steps.batch.outputs.file }}"
-
-      - name: POST batch to BioLens API
-        run: |
-          curl -X POST \
-            "https://biolens-kappa.vercel.app/api/product-search-ingest" \
-            -H "Content-Type: application/json" \
-            --data-binary "@${{ steps.batch.outputs.file }}"
+            echo "Posting $file"
+            curl -X POST \
+              "https://biolens-kappa.vercel.app/api/product-search-ingest" \
+              -H "Content-Type: application/json" \
+              --data-binary @"$file"
+            echo ""
+          done
