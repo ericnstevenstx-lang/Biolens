@@ -1,13 +1,13 @@
 {
-  "query": "test product search",
+  "query": "test product search fresh",
   "source": "genspark",
   "results": [
     {
-      "source_url": "https://example.com/product/123",
+      "source_url": "https://example.com/product/987654",
       "retailer_name": "Amazon",
       "brand_name": "Bedsure",
       "product_title": "Bedsure Fleece Blanket Queen Size",
-      "gtin": "9123456789012",
+      "gtin": "9789456123456",
       "upc": null,
       "ean": null,
       "description_text": "Soft microfiber polyester blanket",
