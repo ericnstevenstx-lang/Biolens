@@ -3,6 +3,24 @@ import { createSupabaseServerClient } from '@/lib/supabase/server'
 
 const OFF_REGISTRY_SOURCE_ID = '8cc45a83-9e2c-447d-a2d0-c9bb1b8e4d77'
 
+function productUrl(source: string, code: string): string {
+  const domains: Record<string, string> = {
+    off: 'world.openfoodfacts.org',
+    obf: 'world.openbeautyfacts.org',
+    opf: 'world.openproductsfacts.org',
+  }
+  return `https://${domains[source] || domains.off}/product/${code}`
+}
+
+function sourceDomain(source: string): string {
+  const domains: Record<string, string> = {
+    off: 'world.openfoodfacts.org',
+    obf: 'world.openbeautyfacts.org',
+    opf: 'world.openproductsfacts.org',
+  }
+  return domains[source] || domains.off
+}
+
 const DEFAULT_QUERIES = [
   // Personal care / cosmetics (high petrochemical exposure)
   'shampoo', 'conditioner', 'body wash', 'face wash', 'moisturizer',
@@ -117,7 +135,7 @@ export async function POST(req: Request) {
             .from('source_products_raw')
             .select('id')
             .eq('external_product_id', p.code)
-            .eq('source', 'off')
+            .eq('source', apiSource)
             .limit(1)
 
           if (existing && existing.length > 0) {
@@ -151,7 +169,7 @@ export async function POST(req: Request) {
               stores: splitCSV(p.stores),
               labels_claims: splitCSV(p.labels),
               packaging_text: p.packaging || null,
-              source_url: `https://world.openfoodfacts.org/product/${p.code}`,
+              source_url: productUrl(apiSource, p.code),
               raw_payload: p,
             })
 
@@ -177,8 +195,8 @@ export async function POST(req: Request) {
                   manufacturer_name: p.brands || null,
                   country_of_origin: splitCSV(p.origins)?.[0] || null,
                   canonical_key: `barcode:${gtin.toLowerCase()}`,
-                  source_type: 'off',
-                  source_id: `https://world.openfoodfacts.org/product/${p.code}`,
+                  source_type: apiSource,
+                  source_id: productUrl(apiSource, p.code),
                   image_url: p.image_url || null,
                 })
                 .select('id')
@@ -190,13 +208,13 @@ export async function POST(req: Request) {
                   .from('source_products_raw')
                   .update({ promoted_product_id: newProd.id })
                   .eq('external_product_id', p.code)
-                  .eq('source', 'off')
+                  .eq('source', apiSource)
 
                 await supabase.from('product_sources').insert({
                   product_id: newProd.id,
-                  source_type: 'off',
-                  source_url: `https://world.openfoodfacts.org/product/${p.code}`,
-                  source_domain: 'world.openfoodfacts.org',
+                  source_type: apiSource,
+                  source_url: productUrl(apiSource, p.code),
+                  source_domain: sourceDomain(apiSource),
                   source_external_id: p.code,
                 })
               }
