@@ -12,7 +12,8 @@ interface Alternative { id: string; name: string; material?: string; petroloadIm
 interface CorporateData { brand?: string; brandOwner?: string; manufacturer?: string; distributor?: string; parentCompany?: string; confidence?: string; }
 interface ImpactDelta { petroloadReduction?: number; microplasticReduction?: number; lifecycleImprovement?: number; estimatedJobsSupported?: number; confidence?: string; available?: boolean; }
 interface OriginData { madeIn?: string; shipsFrom?: string; soldBy?: string; manufacturer?: string; importer?: string; disclosureLevel?: string; confidence?: string; flags?: string[]; }
-interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; }
+interface CapitalFlowData { tariffDrainPct: number; domesticRetentionPct: number; foreignLeakagePct: number; section301Applies: boolean; feocDisqualified: boolean; uflpaRisk: boolean; babaEligible: boolean; tariffRatePct: number; originCountry: string|null; domesticAlternativeTariffPct: number|null; atPrice?: { price: number; tariffDrain: number; domesticRetention: number; foreignLeakage: number }; confidence: string; }
+interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; capitalFlow?: CapitalFlowData; }
 
 // Safe string coercion - handles objects, null, undefined
 function safeStr(v: unknown): string {
@@ -176,7 +177,8 @@ function ResultsContent({ id }: { id: string }) {
         reveal("alternatives", 1200);
             reveal("impactDelta", 1300);
             reveal("corporate", 1450);
-            reveal("evidence", 1650);
+            reveal("capitalFlow", 1600);
+            reveal("evidence", 1800);
       })
       .catch(err => {
         console.error("BioLens intake error:", err);
@@ -523,6 +525,64 @@ function ResultsContent({ id }: { id: string }) {
                   <div className="pt-3 flex justify-end"><Confidence level={safeStr(product.corporate.confidence)}/></div>
                 </div>
               ) : <p className="text-slate-500 text-sm">Corporate attribution data not available.</p>}
+            </Panel>
+
+            {/* CAPITAL FLOW + TARIFF IMPACT */}
+            <Panel title="Capital Flow + Tariff Impact" ready={r("capitalFlow")} skLines={5}>
+              {product?.capitalFlow ? (
+                <div className="space-y-4">
+                  {/* Dollar breakdown if price available */}
+                  {product.capitalFlow.atPrice && (
+                    <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                      <p className="text-xs text-slate-400 mb-2">At ${product.capitalFlow.atPrice.price.toFixed(2)}</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-lg font-bold text-red-400">${product.capitalFlow.atPrice.tariffDrain.toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-500">Tariff Drain</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-emerald-400">${product.capitalFlow.atPrice.domesticRetention.toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-500">Domestic Retention</p>
+                        </div>
+                        <div>
+                          <p className="text-lg font-bold text-amber-400">${product.capitalFlow.atPrice.foreignLeakage.toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-500">Foreign Leakage</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Capital flow bar */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Domestic {product.capitalFlow.domesticRetentionPct.toFixed(1)}%</span>
+                      <span>Foreign {product.capitalFlow.foreignLeakagePct.toFixed(1)}%</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
+                      <div className="h-full bg-emerald-500 transition-all duration-700" style={{width:`${product.capitalFlow.domesticRetentionPct}%`}}/>
+                      <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${product.capitalFlow.foreignLeakagePct}%`}}/>
+                    </div>
+                  </div>
+
+                  <div className="space-y-0">
+                    <Row label="Tariff Rate" value={`${product.capitalFlow.tariffRatePct.toFixed(1)}%`} highlight/>
+                    <Row label="Origin Country" value={product.capitalFlow.originCountry}/>
+                    {product.capitalFlow.domesticAlternativeTariffPct !== null && (
+                      <Row label="Domestic Alt. Tariff" value={`${product.capitalFlow.domesticAlternativeTariffPct.toFixed(1)}%`}/>
+                    )}
+                  </div>
+
+                  {/* Risk flags */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {product.capitalFlow.section301Applies && <RiskFlag flag="Section 301"/>}
+                    {product.capitalFlow.feocDisqualified && <RiskFlag flag="FEOC Exposure Risk"/>}
+                    {product.capitalFlow.uflpaRisk && <RiskFlag flag="UFLPA Risk"/>}
+                    {product.capitalFlow.babaEligible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">BABA Eligible</span>}
+                  </div>
+
+                  <div className="pt-2 flex justify-end"><Confidence level={safeStr(product.capitalFlow.confidence)}/></div>
+                </div>
+              ) : <p className="text-slate-500 text-sm">Capital flow data not yet available for this product.</p>}
             </Panel>
 
             {/* EVIDENCE */}

@@ -66,6 +66,37 @@ export interface NormalizedEvidence {
   lastUpdated?: string
 }
 
+export interface NormalizedCapitalFlow {
+  /** Estimated tariff drain per dollar spent (0-1) */
+  tariffDrainPct: number
+  /** Pct of price retained in domestic economy */
+  domesticRetentionPct: number
+  /** Pct of price leaked to foreign supply chains */
+  foreignLeakagePct: number
+  /** Whether origin country triggers Section 301 tariff */
+  section301Applies: boolean
+  /** FEOC (Foreign Entity of Concern) disqualified */
+  feocDisqualified: boolean
+  /** UFLPA forced labor risk flag */
+  uflpaRisk: boolean
+  /** BABA (Buy America Build America) eligible */
+  babaEligible: boolean
+  /** Tariff rate as percentage */
+  tariffRatePct: number
+  /** Origin country ISO code */
+  originCountry: string | null
+  /** Comparison: domestic alternative tariff rate */
+  domesticAlternativeTariffPct: number | null
+  /** Dollar amounts at a given price point */
+  atPrice?: {
+    price: number
+    tariffDrain: number
+    domesticRetention: number
+    foreignLeakage: number
+  }
+  confidence: string
+}
+
 export interface EnrichedIntelligence {
   petroloadIndex: number | null
   petroloadLabel: string
@@ -75,6 +106,7 @@ export interface EnrichedIntelligence {
   alternatives: NormalizedAlternative[]
   corporate: NormalizedCorporate | null
   evidence: NormalizedEvidence | null
+  capitalFlow: NormalizedCapitalFlow | null
   materialInsight: { headline: string; body: string } | null
   confidence: string
 }
@@ -525,6 +557,116 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
   return Array.from(merged.values())
 }
 
+/**
+ * Resolve capital flow / tariff data for a product.
+ * Pulls from product_origin_profile, tariff_comparisons, and supply_chain_resilience_profile.
+ */
+async function resolveCapitalFlow(
+  productId: string,
+  displayPrice?: number | null
+): Promise<NormalizedCapitalFlow | null> {
+  try {
+    const supabase = await createSupabaseServerClient()
+
+    // Get origin profile with tariff exposure
+    const { data: originProfile } = await supabase
+      .from('product_origin_profile')
+      .select('*')
+      .eq('product_id', productId)
+      .single()
+
+    // Get product country_of_origin from products table
+    const { data: product } = await supabase
+      .from('products')
+      .select('country_of_origin, display_price')
+      .eq('id', productId)
+      .single()
+
+    const price = displayPrice ?? product?.display_price ?? null
+    const originCountry = product?.country_of_origin ?? null
+
+    // Get tariff comparisons for this product's materials
+    const { data: tariffComps } = await supabase
+      .from('tariff_comparisons')
+      .select('*')
+      .limit(5)
+
+    // Get supply chain resilience data
+    const { data: resilience } = await supabase
+      .from('supply_chain_resilience_profile')
+      .select('*')
+      .eq('product_id', productId)
+      .single()
+
+    // Calculate capital flow from available data
+    const tariffPct = originProfile?.tariff_exposure_typical_pct
+      ? Number(originProfile.tariff_exposure_typical_pct)
+      : null
+
+    // If no tariff data at all, return null
+    if (tariffPct === null && !tariffComps?.length && !originCountry) {
+      return null
+    }
+
+    const effectiveTariffPct = tariffPct ?? 0
+
+    // Determine flags from tariff comparisons or origin
+    let section301 = false
+    let feocDisqualified = false
+    let uflpaRisk = false
+    let babaEligible = false
+    let domesticAltTariff: number | null = null
+
+    if (tariffComps?.length) {
+      // Find the most relevant comparison (highest duty rate for foreign material)
+      const foreignComp = tariffComps.find((c) => c.section_301_applies_b)
+      if (foreignComp) {
+        section301 = foreignComp.section_301_applies_b ?? false
+        feocDisqualified = foreignComp.feoc_disqualified_b ?? false
+        uflpaRisk = foreignComp.uflpa_risk_b ?? false
+        babaEligible = foreignComp.baba_eligible_a ?? false
+        domesticAltTariff = foreignComp.duty_rate_a != null ? Number(foreignComp.duty_rate_a) : null
+      }
+    }
+
+    // Capital flow calculation:
+    // If domestic (US): 100% retention, 0% leakage
+    // If imported: tariff goes to govt, remainder to foreign supply chain
+    const isDomestic = originCountry === 'US' || originCountry === 'United States'
+    const domesticRetention = isDomestic ? 100 : Math.max(0, effectiveTariffPct)
+    const foreignLeakage = isDomestic ? 0 : Math.max(0, 100 - effectiveTariffPct)
+
+    const capitalFlow: NormalizedCapitalFlow = {
+      tariffDrainPct: effectiveTariffPct / 100,
+      domesticRetentionPct: isDomestic ? 100 : effectiveTariffPct,
+      foreignLeakagePct: foreignLeakage,
+      section301Applies: section301,
+      feocDisqualified: feocDisqualified,
+      uflpaRisk: uflpaRisk,
+      babaEligible: babaEligible,
+      tariffRatePct: effectiveTariffPct,
+      originCountry,
+      domesticAlternativeTariffPct: domesticAltTariff,
+      confidence: originProfile ? 'estimated' : tariffComps?.length ? 'inferred' : 'limited',
+    }
+
+    // Add dollar amounts if we have a price
+    if (price && price > 0) {
+      capitalFlow.atPrice = {
+        price,
+        tariffDrain: isDomestic ? 0 : Math.round((price * effectiveTariffPct / 100) * 100) / 100,
+        domesticRetention: isDomestic ? price : Math.round((price * effectiveTariffPct / 100) * 100) / 100,
+        foreignLeakage: isDomestic ? 0 : Math.round((price * (100 - effectiveTariffPct) / 100) * 100) / 100,
+      }
+    }
+
+    return capitalFlow
+  } catch (err) {
+    console.error('Capital flow resolution failed:', err)
+    return null
+  }
+}
+
 export async function enrichByProductId(productId: string): Promise<EnrichedIntelligence> {
   let pi: Record<string, any> | null = null
   let materialNames: string[] = []
@@ -548,13 +690,19 @@ export async function enrichByProductId(productId: string): Promise<EnrichedInte
     // RPC unavailable
   }
 
-  const graphMaterials = await enrichByMaterialNames(materialNames)
-  return normalizeIntelligence(pi, graphMaterials)
+  // Run material enrichment and capital flow in parallel
+  const [graphMaterials, capitalFlow] = await Promise.all([
+    enrichByMaterialNames(materialNames),
+    resolveCapitalFlow(productId, pi?.display_price),
+  ])
+
+  return normalizeIntelligence(pi, graphMaterials, capitalFlow)
 }
 
 export function normalizeIntelligence(
   pi: Record<string, any> | null,
-  graphMaterials: GraphMaterial[]
+  graphMaterials: GraphMaterial[],
+  capitalFlow: NormalizedCapitalFlow | null = null
 ): EnrichedIntelligence {
   const rpcPetroScore =
     safePetroScore(pi?.petroload_score) ??
@@ -767,6 +915,7 @@ export function normalizeIntelligence(
     alternatives: alternatives.slice(0, 5),
     corporate: corporate ?? null,
     evidence: evidence ?? null,
+    capitalFlow,
     materialInsight,
     confidence: graphMaterials.length > 0 ? (pi ? 'estimated' : 'inferred') : 'limited',
   }
