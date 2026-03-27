@@ -76,6 +76,7 @@ export async function POST(req: Request) {
     const pagesPerQuery: number = body.pages_per_query || 2
     const country: string | undefined = body.country || undefined
     const apiSource: 'off' | 'obf' | 'opf' = body.source || 'off'
+    const startPage: number = body.start_page || 1
     const maxQueries = Math.min(queries.length, 15)
     const limitedQueries = queries.slice(0, maxQueries)
 
@@ -99,7 +100,7 @@ export async function POST(req: Request) {
       let qInserted = 0
       let qPromoted = 0
 
-      for (let page = 1; page <= pagesPerQuery; page++) {
+      for (let page = startPage; page < startPage + pagesPerQuery; page++) {
         if (page > 1 || limitedQueries.indexOf(query) > 0) {
           await new Promise((r) => setTimeout(r, 150))
         }
@@ -133,7 +134,7 @@ export async function POST(req: Request) {
             .insert({
               registry_source_id: OFF_REGISTRY_SOURCE_ID,
               ingestion_run_id: runId,
-              source: 'off',
+              source: apiSource,
               external_product_id: p.code,
               barcode: p.code,
               gtin,
