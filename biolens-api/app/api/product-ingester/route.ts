@@ -42,8 +42,13 @@ function splitCSV(value: string | undefined): string[] | null {
   return arr.length ? arr : null
 }
 
-async function searchOFF(query: string, page = 1, pageSize = 50, country?: string): Promise<OFFProduct[]> {
-  const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
+async function searchOFF(query: string, page = 1, pageSize = 50, country?: string, source: 'off' | 'obf' | 'opf' = 'off'): Promise<OFFProduct[]> {
+  const domains: Record<string, string> = {
+    off: 'https://world.openfoodfacts.org/cgi/search.pl',
+    obf: 'https://world.openbeautyfacts.org/cgi/search.pl',
+    opf: 'https://world.openproductsfacts.org/cgi/search.pl',
+  }
+  const url = new URL(domains[source])
   url.searchParams.set('search_terms', query)
   url.searchParams.set('search_simple', '1')
   url.searchParams.set('action', 'process')
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
     const queries: string[] = body.queries || DEFAULT_QUERIES
     const pagesPerQuery: number = body.pages_per_query || 2
     const country: string | undefined = body.country || undefined
+    const apiSource: 'off' | 'obf' | 'opf' = body.source || 'off'
     const maxQueries = Math.min(queries.length, 15)
     const limitedQueries = queries.slice(0, maxQueries)
 
@@ -98,7 +104,7 @@ export async function POST(req: Request) {
           await new Promise((r) => setTimeout(r, 150))
         }
 
-        const products = await searchOFF(query, page, 50, country)
+        const products = await searchOFF(query, page, 50, country, apiSource)
         if (!products.length) break
         qFetched += products.length
 
