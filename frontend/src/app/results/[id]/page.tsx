@@ -179,6 +179,7 @@ function ResultsContent({ id }: { id: string }) {
             reveal("corporate", 1450);
             reveal("capitalFlow", 1600);
             reveal("evidence", 1800);
+            reveal("whereToBuy", 2000);
       })
       .catch(err => {
         console.error("BioLens intake error:", err);
@@ -616,9 +617,37 @@ function ResultsContent({ id }: { id: string }) {
               ) : <p className="text-slate-500 text-sm">Evidence sources loading.</p>}
             </Panel>
 
+            {/* WHERE TO BUY — FiberFoundry */}
+            <Panel title="Where to Buy — Better Alternatives" ready={r("whereToBuy")} skLines={3}>
+              {product?.alternatives && product.alternatives.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-400">Bio-based alternatives available through FiberFoundry and verified suppliers.</p>
+                  <div className="space-y-2">
+                    {product.alternatives.slice(0, 3).map((alt, i) => (
+                      <div key={alt.id || i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg flex items-center justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-200 truncate">{alt.name}</p>
+                          <div className="flex gap-3 mt-1">
+                            {alt.petroloadImprovement > 0 && (
+                              <span className="text-[10px] text-emerald-400">-{alt.petroloadImprovement} pts petroload</span>
+                            )}
+                            {alt.microplasticReduction && alt.microplasticReduction > 0 && (
+                              <span className="text-[10px] text-cyan-400">-{alt.microplasticReduction}% microplastic</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20 whitespace-nowrap flex-shrink-0">Coming Soon</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-600 text-center pt-1">FiberFoundry verified suppliers prioritized. Marketplace listings excluded.</p>
+                </div>
+              ) : <p className="text-slate-500 text-sm">Alternative product sourcing expanding for this category.</p>}
+            </Panel>
+
           </div>
         </div>
-        
+
       {/* IMPACT DELTA */}
       <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl overflow-hidden">
         <div className="px-5 py-3 border-b border-[#1a2d48] bg-[#0a1520] flex items-center justify-between">

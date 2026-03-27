@@ -521,6 +521,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       alternatives: intelligence.alternatives,
       corporate: intelligence.corporate,
       evidence: intelligence.evidence,
+      capitalFlow: intelligence.capitalFlow,
       materialInsight: intelligence.materialInsight,
       confidence: intelligence.confidence,
     };
