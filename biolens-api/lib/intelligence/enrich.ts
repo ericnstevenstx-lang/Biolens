@@ -705,6 +705,7 @@ export function normalizeIntelligence(
   capitalFlow: NormalizedCapitalFlow | null = null
 ): EnrichedIntelligence {
   const rpcPetroScore =
+    safePetroScore(pi?.material_profile?.petroload_score) ??
     safePetroScore(pi?.petroload_score) ??
     safePetroScore(pi?.petroload_index) ??
     safePetroScore(pi?.petroload)
@@ -754,14 +755,26 @@ export function normalizeIntelligence(
     }
   }
 
+  // --- Health Effects: merge graph toxicity + RPC health_concerns ---
   let healthEffects: NormalizedHealth | null = null
+
+  // Use material_profile toxicity if available from RPC
+  const profileToxicity = pi?.material_profile?.toxicity_score != null
+    ? Number(pi.material_profile.toxicity_score)
+    : null
+
   const maxToxicity = graphMaterials.length
     ? Math.max(...graphMaterials.map((g) => g.toxicity ?? 0))
-    : pi?.toxicity_score != null
-      ? Number(pi.toxicity_score)
-      : null
+    : profileToxicity ?? (pi?.toxicity_score != null ? Number(pi.toxicity_score) : null)
 
-  if (maxToxicity !== null || pi?.health_effects) {
+  // Parse health_concerns from RPC (concern assessments)
+  const healthConcerns: any[] = Array.isArray(pi?.health_concerns) ? pi.health_concerns : []
+
+  // Derive boolean flags from concern codes
+  const hasConcern = (code: string) =>
+    healthConcerns.some((c) => c.concern_code === code && c.concern_tier === 'high')
+
+  if (maxToxicity !== null || healthConcerns.length || pi?.health_effects) {
     const hazard =
       maxToxicity !== null
         ? maxToxicity > 0.7
@@ -769,19 +782,44 @@ export function normalizeIntelligence(
           : maxToxicity > 0.4
             ? 'moderate'
             : 'low'
-        : riskToHazard(pi?.risk_level)
+        : healthConcerns.length
+          ? healthConcerns.some((c) => c.concern_tier === 'high') ? 'high' : 'moderate'
+          : riskToHazard(pi?.risk_level)
 
     const he = pi?.health_effects as any
 
+    // Build exposure pathways from concern domains
+    const exposurePathways: Array<{ type: string; risk: 'low' | 'moderate' | 'high'; notes?: string }> = []
+    const pathwayMap: Record<string, string> = {
+      dermal_contact: 'dermal',
+      inhalation: 'inhalation',
+      ingestion_adjacency: 'ingestion',
+    }
+    for (const concern of healthConcerns) {
+      const pathway = pathwayMap[concern.concern_code]
+      if (pathway) {
+        exposurePathways.push({
+          type: pathway,
+          risk: concern.concern_tier === 'high' ? 'high' : 'moderate',
+        })
+      }
+    }
+
+    // Build chemical flags from high-tier concerns
+    const chemicalFlags = healthConcerns
+      .filter((c) => c.concern_tier === 'high')
+      .map((c) => c.concern_name as string)
+      .slice(0, 5)
+
     healthEffects = {
       hazardSignal: hazard,
-      endocrineDisruption: he?.endocrine_disruption ?? null,
-      carcinogenicity: he?.carcinogenicity ?? null,
-      leachateRisk: he?.leachate_risk ?? null,
-      chemicalFlags: he?.chemical_flags ?? [],
-      exposurePathways: he?.exposure_pathways ?? [],
-      confidence: graphMaterials.length ? 'inferred' : 'estimated',
-      evidenceAvailable: graphMaterials.length > 0,
+      endocrineDisruption: hasConcern('endocrine_disruption') || (he?.endocrine_disruption ?? null),
+      carcinogenicity: hasConcern('carcinogenicity') || (he?.carcinogenicity ?? null),
+      leachateRisk: hasConcern('plasticizer') || hasConcern('persistent_chemical') || (he?.leachate_risk ?? null),
+      chemicalFlags: chemicalFlags.length ? chemicalFlags : (he?.chemical_flags ?? []),
+      exposurePathways: exposurePathways.length ? exposurePathways : (he?.exposure_pathways ?? []),
+      confidence: healthConcerns.length ? 'estimated' : graphMaterials.length ? 'inferred' : 'estimated',
+      evidenceAvailable: healthConcerns.length > 0 || graphMaterials.length > 0,
       notes: he?.notes ?? undefined,
     }
   }
