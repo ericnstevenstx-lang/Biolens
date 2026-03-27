@@ -42,7 +42,7 @@ function splitCSV(value: string | undefined): string[] | null {
   return arr.length ? arr : null
 }
 
-async function searchOFF(query: string, page = 1, pageSize = 50): Promise<OFFProduct[]> {
+async function searchOFF(query: string, page = 1, pageSize = 50, country?: string): Promise<OFFProduct[]> {
   const url = new URL('https://world.openfoodfacts.org/cgi/search.pl')
   url.searchParams.set('search_terms', query)
   url.searchParams.set('search_simple', '1')
@@ -50,7 +50,7 @@ async function searchOFF(query: string, page = 1, pageSize = 50): Promise<OFFPro
   url.searchParams.set('json', 'true')
   url.searchParams.set('page', String(page))
   url.searchParams.set('page_size', String(pageSize))
-  url.searchParams.set('countries_tags', 'united-states')
+  if (country) url.searchParams.set('countries_tags', country)
 
   const resp = await fetch(url.toString(), {
     headers: {
@@ -69,6 +69,7 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}))
     const queries: string[] = body.queries || DEFAULT_QUERIES
     const pagesPerQuery: number = body.pages_per_query || 2
+    const country: string | undefined = body.country || undefined
     const maxQueries = Math.min(queries.length, 15)
     const limitedQueries = queries.slice(0, maxQueries)
 
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
           await new Promise((r) => setTimeout(r, 150))
         }
 
-        const products = await searchOFF(query, page, 50)
+        const products = await searchOFF(query, page, 50, country)
         if (!products.length) break
         qFetched += products.length
 
