@@ -467,16 +467,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const canonicalKey = buildCanonicalKey(inputType, value, asin);
     const productId = await upsertProduct(inputType, value, extracted, canonicalKey);
 
-    // For search products without a brand, read manufacturer from DB as fallback
-    if (!extracted.brand && !extracted.manufacturer) {
+    // For search products, read manufacturer + country from DB as fallback
+    if (!extracted.brand || !extracted.countryOfOrigin) {
       const supabase = await createSupabaseServerClient();
       const { data: prodRow } = await supabase
         .from("products")
-        .select("manufacturer_name")
+        .select("manufacturer_name, country_of_origin")
         .eq("id", productId)
         .maybeSingle();
-      if (prodRow?.manufacturer_name) {
-        extracted.brand = prodRow.manufacturer_name;
+      if (prodRow) {
+        if (!extracted.brand && prodRow.manufacturer_name) {
+          extracted.brand = prodRow.manufacturer_name;
+        }
+        if (!extracted.countryOfOrigin && prodRow.country_of_origin) {
+          extracted.countryOfOrigin = prodRow.country_of_origin;
+        }
       }
     }
 
