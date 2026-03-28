@@ -323,6 +323,14 @@ function inferMaterialFromText(text: string): string | null {
     ["tulle", "Tulle"],
     ["muslin", "Muslin"],
     ["terry cloth", "Terry Cloth"],
+    ["t-shirt", "Cotton"],
+    ["tee shirt", "Cotton"],
+    ["hoodie", "Cotton"],
+    ["sweatshirt", "Cotton"],
+    ["jeans", "Denim"],
+    ["towel", "Cotton"],
+    ["bedsheet", "Cotton"],
+    ["bed sheet", "Cotton"],
     ["foam", "Polyurethane Foam"],
     ["memory foam", "Memory Foam"],
     ["plywood", "Plywood"],
@@ -742,10 +750,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         fallbackGraphMaterials = await enrichByMaterialNames(allMats);
       }
       if (fallbackGraphMaterials.length === 0) {
-        // Fall back to searching by each term individually
-        for (const term of searchTerms) {
-          fallbackGraphMaterials = await enrichByMaterialNames([term]);
-          if (fallbackGraphMaterials.length > 0) break;
+        // Fall back: try inferring material from title text, then search
+        const titleMaterial = extracted.title ? inferMaterialFromText(extracted.title) : null;
+        if (titleMaterial) {
+          fallbackGraphMaterials = await enrichByMaterialNames([titleMaterial]);
+        }
+        // Last resort: search by value (for search inputType)
+        if (fallbackGraphMaterials.length === 0 && inputType === "search") {
+          fallbackGraphMaterials = await enrichByMaterialNames([value]);
         }
       }
 
