@@ -317,6 +317,29 @@ function ResultsContent({ id }: { id: string }) {
           </div>
         )}
 
+        {/* ── CERTIFICATION vs REALITY ──────────────────────────────── */}
+        {product?.certifications && product.certifications.length > 0 && product?.healthEffects?.hazardSignal && product.healthEffects.hazardSignal !== "low" && (
+          <div className="p-4 rounded-2xl border border-amber-400/30 bg-amber-400/5">
+            <div className="flex items-start gap-3">
+              <span className="text-xl flex-shrink-0">⚠</span>
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-amber-400" style={{fontFamily:"var(--font-manrope)"}}>Certification vs Reality</p>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  This product carries {product.certifications.join(", ")} certification{product.certifications.length > 1 ? "s" : ""}, but BioLens material analysis flagged {product.healthEffects.hazardSignal} health concerns
+                  {product.healthEffects.chemicalFlags && product.healthEffects.chemicalFlags.length > 0
+                    ? ` including ${product.healthEffects.chemicalFlags.slice(0, 2).map(f => safeStr(f).replace(" Concern", "").toLowerCase()).join(" and ")}`
+                    : ""
+                  }. Certifications often test for chemical safety in production but do not address microplastic shedding, petroleum dependency, or end-of-life environmental impact.
+                </p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {product.certifications.map((c, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 border border-cyan-400/20">{c}</span>)}
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-400/10 text-red-400 border border-red-400/20">Petroload {score}/100</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── 1. HEALTH + MATERIALS (consumer priority #1: "Is this hurting me?") ── */}
         {(hasHealthData || (product?.materials && product.materials.length > 0)) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

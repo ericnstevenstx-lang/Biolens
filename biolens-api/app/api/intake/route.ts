@@ -264,6 +264,22 @@ function inferMaterialFromText(text: string): string | null {
     ["leather", "Leather"],
     ["hemp", "Hemp"],
     ["jute", "Jute"],
+    ["velvet", "Velvet"],
+    ["fleece", "Fleece"],
+    ["denim", "Denim"],
+    ["canvas", "Canvas"],
+    ["twill", "Twill"],
+    ["satin", "Satin"],
+    ["chiffon", "Chiffon"],
+    ["organza", "Organza"],
+    ["tulle", "Tulle"],
+    ["muslin", "Muslin"],
+    ["terry cloth", "Terry Cloth"],
+    ["foam", "Polyurethane Foam"],
+    ["memory foam", "Memory Foam"],
+    ["plywood", "Plywood"],
+    ["mdf", "MDF"],
+    ["particleboard", "Particleboard"],
   ];
   // Prefer "100% X" matches first
   for (const [pattern, name] of materials) {
@@ -272,7 +288,18 @@ function inferMaterialFromText(text: string): string | null {
   return null;
 }
 
+// Extract product name from Amazon URL slug (e.g. /RECYCO-California-Oversized-Bedspread/dp/...)
+function titleFromAmazonUrl(url: string): string | undefined {
+  const match = /amazon\.com\/([A-Za-z0-9-]+)\/dp\//i.exec(url);
+  if (!match) return undefined;
+  return match[1].replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
 async function fetchAmazonProduct(asin: string, rawUrl: string): Promise<ExtractedProduct> {
+  // Always extract title from URL as fallback
+  const urlTitle = titleFromAmazonUrl(rawUrl);
+  const urlMaterial = urlTitle ? inferMaterialFromText(urlTitle) : null;
+
   try {
     const response = await fetch(`https://www.amazon.com/dp/${asin}`, {
       headers: {
@@ -284,14 +311,27 @@ async function fetchAmazonProduct(asin: string, rawUrl: string): Promise<Extract
     });
 
     if (!response.ok) {
-      return { asin, rawPayload: { asin, url: rawUrl, fetchStatus: response.status } };
+      // Scraping failed - use URL-derived title + material as fallback
+      return {
+        asin,
+        title: urlTitle || undefined,
+        rawPayload: { asin, url: rawUrl, fetchStatus: response.status, extractedMaterial: urlMaterial || undefined },
+      };
     }
 
-    return parseAmazonHtml(await response.text(), asin, rawUrl);
+    const parsed = parseAmazonHtml(await response.text(), asin, rawUrl);
+    // Backfill from URL if scraping got empty results
+    if (!parsed.title && urlTitle) parsed.title = urlTitle;
+    if (!(parsed.rawPayload as any)?.extractedMaterial && urlMaterial) {
+      (parsed.rawPayload as any).extractedMaterial = urlMaterial;
+    }
+    return parsed;
   } catch {
+    // Timeout or blocked - use URL-derived data
     return {
       asin,
-      rawPayload: { asin, url: rawUrl, fetchError: "timeout_or_blocked" },
+      title: urlTitle || undefined,
+      rawPayload: { asin, url: rawUrl, fetchError: "timeout_or_blocked", extractedMaterial: urlMaterial || undefined },
     };
   }
 }
