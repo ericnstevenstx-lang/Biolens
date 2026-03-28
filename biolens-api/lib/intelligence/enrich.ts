@@ -97,6 +97,18 @@ export interface NormalizedCapitalFlow {
   confidence: string
 }
 
+export interface NormalizedPoliticalActivity {
+  companyName: string
+  totalContributions: number
+  republicanPct: number
+  democratPct: number
+  otherPct: number
+  cycle: number
+  pacName: string
+  topRecipients: Array<{ name: string; party: string; amount: number }>
+  confidence: string
+}
+
 export interface EnrichedIntelligence {
   petroloadIndex: number | null
   petroloadLabel: string
@@ -107,6 +119,7 @@ export interface EnrichedIntelligence {
   corporate: NormalizedCorporate | null
   evidence: NormalizedEvidence | null
   capitalFlow: NormalizedCapitalFlow | null
+  politicalActivity: NormalizedPoliticalActivity | null
   materialInsight: { headline: string; body: string } | null
   confidence: string
 }
@@ -518,6 +531,53 @@ async function enrichMaterialsFromNeo4j(names: string[]): Promise<GraphMaterial[
   } catch (err) {
     console.error('Neo4j material enrichment failed:', err)
     return []
+  }
+}
+
+/**
+ * Fetch corporate political activity for a company name.
+ * Looks up PAC registry and contribution summaries from FEC data.
+ */
+export async function fetchPoliticalActivity(
+  companyName: string | undefined | null,
+  cycle: number = 2024
+): Promise<NormalizedPoliticalActivity | null> {
+  if (!companyName) return null
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase.rpc('get_corporate_political_activity', {
+      p_company_name: companyName,
+      p_cycle: cycle,
+    })
+
+    if (error || !data || !data.pacs || !data.pacs.length) return null
+
+    // Find the PAC with actual summary data
+    const pacWithData = data.pacs.find((p: any) => p.summary)
+    if (!pacWithData) return null
+
+    const s = pacWithData.summary
+    const totalToParties = (s.contributions_to_republicans || 0) + (s.contributions_to_democrats || 0) + (s.contributions_to_other || 0)
+    if (totalToParties === 0) return null
+
+    return {
+      companyName: data.company_name,
+      totalContributions: s.contributions_to_candidates || 0,
+      republicanPct: Math.round(((s.contributions_to_republicans || 0) / totalToParties) * 100),
+      democratPct: Math.round(((s.contributions_to_democrats || 0) / totalToParties) * 100),
+      otherPct: Math.round(((s.contributions_to_other || 0) / totalToParties) * 100),
+      cycle: s.cycle,
+      pacName: pacWithData.fec_committee_name,
+      topRecipients: (pacWithData.top_recipients || []).slice(0, 5).map((r: any) => ({
+        name: r.recipient_name,
+        party: r.recipient_party,
+        amount: r.amount,
+      })),
+      confidence: 'verified',
+    }
+  } catch (err) {
+    console.error('Political activity fetch failed:', err)
+    return null
   }
 }
 
@@ -1027,6 +1087,7 @@ export function normalizeIntelligence(
     corporate: corporate ?? null,
     evidence: evidence ?? null,
     capitalFlow,
+    politicalActivity: null,
     materialInsight,
     confidence: graphMaterials.length > 0 ? (pi ? 'estimated' : 'inferred') : 'limited',
   }

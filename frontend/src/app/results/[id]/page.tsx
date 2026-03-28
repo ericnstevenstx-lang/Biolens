@@ -14,7 +14,8 @@ interface CorporateData { brand?: string; brandOwner?: string; manufacturer?: st
 interface ImpactDelta { petroloadReduction?: number; microplasticReduction?: number; lifecycleImprovement?: number; estimatedJobsSupported?: number; confidence?: string; available?: boolean; }
 interface OriginData { madeIn?: string; shipsFrom?: string; soldBy?: string; manufacturer?: string; importer?: string; disclosureLevel?: string; confidence?: string; flags?: string[]; }
 interface CapitalFlowData { tariffDrainPct: number; domesticRetentionPct: number; foreignLeakagePct: number; section301Applies: boolean; feocDisqualified: boolean; uflpaRisk: boolean; babaEligible: boolean; tariffRatePct: number; originCountry: string|null; domesticAlternativeTariffPct: number|null; atPrice?: { price: number; tariffDrain: number; domesticRetention: number; foreignLeakage: number }; confidence: string; }
-interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; capitalFlow?: CapitalFlowData; }
+interface PoliticalActivity { companyName: string; totalContributions: number; republicanPct: number; democratPct: number; otherPct: number; cycle: number; pacName: string; topRecipients: { name: string; party: string; amount: number }[]; confidence: string; }
+interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; capitalFlow?: CapitalFlowData; politicalActivity?: PoliticalActivity; }
 
 // Safe string coercion - handles objects, null, undefined
 function safeStr(v: unknown): string {
@@ -217,6 +218,7 @@ function ResultsContent({ id }: { id: string }) {
         reveal("impactDelta", 1300);
         reveal("corporate", 1450);
         reveal("capitalFlow", 1600);
+        reveal("politicalActivity", 1700);
         reveal("evidence", 1800);
         reveal("whereToBuy", 2000);
       })
@@ -472,6 +474,66 @@ function ResultsContent({ id }: { id: string }) {
               </Panel>
             )}
           </div>
+        )}
+
+        {/* ── CORPORATE POLITICAL ACTIVITY ──────────────────────────────── */}
+        {product?.politicalActivity && (
+          <Panel title="Corporate Political Activity" ready={r("politicalActivity")} skLines={4}>
+            {(() => {
+              const pa = product.politicalActivity;
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{pa.companyName}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{pa.pacName}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg font-black text-white" style={{fontFamily:"var(--font-manrope)"}}>${pa.totalContributions.toLocaleString()}</p>
+                      <p className="text-[10px] text-slate-500">{pa.cycle} cycle</p>
+                    </div>
+                  </div>
+
+                  {/* Party split bar */}
+                  <div>
+                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                      <span>Republican {pa.republicanPct}%</span>
+                      <span>Democrat {pa.democratPct}%</span>
+                      {pa.otherPct > 0 && <span>Other {pa.otherPct}%</span>}
+                    </div>
+                    <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
+                      <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${pa.republicanPct}%`}}/>
+                      <div className="h-full bg-blue-500 transition-all duration-700" style={{width:`${pa.democratPct}%`}}/>
+                      {pa.otherPct > 0 && <div className="h-full bg-slate-500 transition-all duration-700" style={{width:`${pa.otherPct}%`}}/>}
+                    </div>
+                  </div>
+
+                  {/* Top recipients */}
+                  {pa.topRecipients.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Top Recipients</p>
+                      <div className="space-y-0">
+                        {pa.topRecipients.map((r, i) => (
+                          <div key={i} className="flex items-center justify-between py-2 border-b border-[#1a2d48] last:border-0">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.party === "REP" ? "bg-red-500" : r.party === "DEM" ? "bg-blue-500" : "bg-slate-500"}`}/>
+                              <span className="text-xs text-slate-300">{r.name}</span>
+                            </div>
+                            <span className="text-xs font-semibold text-slate-400">${r.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-1 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-600">Source: FEC.gov public filings</span>
+                    <Confidence level={pa.confidence}/>
+                  </div>
+                </div>
+              );
+            })()}
+          </Panel>
         )}
 
         {/* ── SECTION 4: PETROLOAD GAUGE + MATERIALS (horizontal) ───────── */}

@@ -7,6 +7,7 @@ import {
   normalizeIntelligence,
   fetchConcernAssessmentsForMaterials,
   resolveCapitalFlow,
+  fetchPoliticalActivity,
 } from "@/lib/intelligence/enrich";
 
 type InputType = "barcode" | "amazon" | "url" | "search";
@@ -494,6 +495,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       };
     }
 
+    // Fetch political activity for the brand/manufacturer
+    const companyForPolitics = extracted.brand ?? intelligence.corporate?.brand ?? intelligence.corporate?.manufacturer ?? null;
+    const politicalActivity = await fetchPoliticalActivity(companyForPolitics);
+    if (politicalActivity) {
+      intelligence = { ...intelligence, politicalActivity };
+    }
+
     const feocRegions = ["china", "vietnam", "bangladesh", "cambodia", "indonesia"];
     const madeIn = (originSignal.manufacturing_country ?? extracted.countryOfOrigin ?? "").toLowerCase();
 
@@ -529,6 +537,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       corporate: intelligence.corporate,
       evidence: intelligence.evidence,
       capitalFlow: intelligence.capitalFlow,
+      politicalActivity: intelligence.politicalActivity,
       materialInsight: intelligence.materialInsight,
       confidence: intelligence.confidence,
     };
