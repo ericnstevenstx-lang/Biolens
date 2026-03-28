@@ -586,7 +586,8 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
  */
 async function resolveCapitalFlow(
   productId: string,
-  displayPrice?: number | null
+  displayPrice?: number | null,
+  materialNames: string[] = []
 ): Promise<NormalizedCapitalFlow | null> {
   try {
     const supabase = await createSupabaseServerClient()
@@ -626,7 +627,32 @@ async function resolveCapitalFlow(
       ? Number(originProfile.tariff_exposure_typical_pct)
       : null
 
-    // If no tariff data at all, return null
+    // If no product-level tariff data, try material-based tariff lookup
+    if (tariffPct === null && !tariffComps?.length && !originCountry && materialNames.length) {
+      const { data: materialTariff } = await supabase.rpc('get_tariff_for_materials', {
+        p_material_names: materialNames,
+      })
+
+      if (materialTariff && materialTariff.tariff_rate_pct != null) {
+        const mt = materialTariff
+        const mtTariffPct = Number(mt.tariff_rate_pct)
+        return {
+          tariffDrainPct: mtTariffPct / 100,
+          domesticRetentionPct: mtTariffPct,
+          foreignLeakagePct: Math.max(0, 100 - mtTariffPct),
+          section301Applies: mt.section_301_applies ?? false,
+          feocDisqualified: mt.feoc_disqualified ?? false,
+          uflpaRisk: mt.uflpa_risk ?? false,
+          babaEligible: mt.baba_eligible ?? false,
+          tariffRatePct: mtTariffPct,
+          originCountry: mt.origin_country ?? null,
+          domesticAlternativeTariffPct: mt.domestic_rate_pct != null ? Number(mt.domestic_rate_pct) : null,
+          confidence: 'inferred',
+        }
+      }
+    }
+
+    // If still no tariff data at all, return null
     if (tariffPct === null && !tariffComps?.length && !originCountry) {
       return null
     }
@@ -641,7 +667,6 @@ async function resolveCapitalFlow(
     let domesticAltTariff: number | null = null
 
     if (tariffComps?.length) {
-      // Find the most relevant comparison (highest duty rate for foreign material)
       const foreignComp = tariffComps.find((c) => c.section_301_applies_b)
       if (foreignComp) {
         section301 = foreignComp.section_301_applies_b ?? false
@@ -713,11 +738,12 @@ export async function enrichByProductId(productId: string): Promise<EnrichedInte
     // RPC unavailable
   }
 
-  // Run material enrichment and capital flow in parallel
-  const [graphMaterials, capitalFlow] = await Promise.all([
-    enrichByMaterialNames(materialNames),
-    resolveCapitalFlow(productId, pi?.display_price),
-  ])
+  // Run material enrichment first, then capital flow (needs material names)
+  const graphMaterials = await enrichByMaterialNames(materialNames)
+
+  // Resolve capital flow with material names as fallback for tariff lookup
+  const allMaterialNames = graphMaterials.map((g) => g.material)
+  const capitalFlow = await resolveCapitalFlow(productId, pi?.display_price, allMaterialNames)
 
   // If RPC didn't return health_concerns (no product_materials entries),
   // fetch concern assessments directly for the matched materials
