@@ -287,11 +287,17 @@ async function upsertProduct(
 
   const { data: existing } = await supabase
     .from("products")
-    .select("id")
+    .select("id, manufacturer_name")
     .eq("canonical_key", canonicalKey)
     .maybeSingle();
 
-  if (existing?.id) return existing.id as string;
+  if (existing?.id) {
+    // Backfill brand from DB if extraction didn't find one
+    if (!extracted.brand && existing.manufacturer_name) {
+      extracted.brand = existing.manufacturer_name;
+    }
+    return existing.id as string;
+  }
 
   const { data, error } = await supabase
     .from("products")
