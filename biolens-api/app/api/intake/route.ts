@@ -150,11 +150,10 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     /"category"\s*:\s*"([^"]+)"/i
   );
 
-  // Extract price
-  const priceStr = extractFromHtml(
-    html,
-    /class="a-price-whole"[^>]*>(\d+)/i
-  );
+  // Extract price (whole + fraction)
+  const priceWhole = extractFromHtml(html, /class="a-price-whole"[^>]*>(\d+)/i);
+  const priceFraction = extractFromHtml(html, /class="a-price-fraction"[^>]*>(\d+)/i);
+  const priceStr = priceWhole ? `${priceWhole}.${priceFraction || '00'}` : null;
 
   // Extract description
   const description = extractFromHtml(
@@ -236,7 +235,7 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
       extractedMaterial: inferredMaterial || undefined,
       allExtractedMaterials: additionalMaterials.length ? additionalMaterials : undefined,
       fabricType: material || undefined,
-      price: priceStr ? Number(priceStr) : undefined,
+      price: priceStr ? parseFloat(priceStr) : undefined,
       certifications: certifications.length ? certifications : undefined,
     },
   };
@@ -839,6 +838,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       materialInsight: intelligence.materialInsight,
       confidence: intelligence.confidence,
       certifications: (extracted.rawPayload as any)?.certifications || [],
+      price: (extracted.rawPayload as any)?.price || null,
     };
 
     return NextResponse.json({
