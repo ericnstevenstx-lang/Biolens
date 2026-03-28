@@ -837,29 +837,31 @@ export function normalizeIntelligence(
     healthConcerns.some((c) => c.concern_code === code && (c.concern_tier === 'high' || c.concern_tier === 'very_high'))
 
   if (maxToxicity !== null || healthConcerns.length || pi?.health_effects) {
-    const hazard =
-      maxToxicity !== null
+    // Concern assessments are the most reliable hazard signal — prefer over toxicity score
+    const hazard = healthConcerns.length
+      ? healthConcerns.some((c) => c.concern_tier === 'high' || c.concern_tier === 'very_high') ? 'high' : 'moderate'
+      : maxToxicity !== null
         ? maxToxicity > 0.7
           ? 'high'
           : maxToxicity > 0.4
             ? 'moderate'
             : 'low'
-        : healthConcerns.length
-          ? healthConcerns.some((c) => c.concern_tier === 'high') ? 'high' : 'moderate'
-          : riskToHazard(pi?.risk_level)
+        : riskToHazard(pi?.risk_level)
 
     const he = pi?.health_effects as any
 
-    // Build exposure pathways from concern domains
+    // Build exposure pathways from concern domains (deduplicated by type)
     const exposurePathways: Array<{ type: string; risk: 'low' | 'moderate' | 'high'; notes?: string }> = []
     const pathwayMap: Record<string, string> = {
       dermal_contact: 'dermal',
       inhalation: 'inhalation',
       ingestion_adjacency: 'ingestion',
     }
+    const seenPathways = new Set<string>()
     for (const concern of healthConcerns) {
       const pathway = pathwayMap[concern.concern_code]
-      if (pathway) {
+      if (pathway && !seenPathways.has(pathway)) {
+        seenPathways.add(pathway)
         exposurePathways.push({
           type: pathway,
           risk: concern.concern_tier === 'high' ? 'high' : 'moderate',
@@ -867,11 +869,12 @@ export function normalizeIntelligence(
       }
     }
 
-    // Build chemical flags from high-tier concerns
-    const chemicalFlags = healthConcerns
-      .filter((c) => c.concern_tier === 'high')
-      .map((c) => c.concern_name as string)
-      .slice(0, 5)
+    // Build chemical flags from high-tier concerns (deduplicated)
+    const chemicalFlags = [...new Set(
+      healthConcerns
+        .filter((c) => c.concern_tier === 'high' || c.concern_tier === 'very_high')
+        .map((c) => c.concern_name as string)
+    )].slice(0, 5)
 
     // When we have concern data, derive booleans. When no data, leave null.
     const hasData = healthConcerns.length > 0
