@@ -2,6 +2,7 @@
 import { use, useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Nav from "@/components/Nav";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface Material { name: string; classification: "bio"|"bridge"|"synthetic"|"unknown"; percentage?: number; healthScore?: number; confidence?: string; notes?: string; }
@@ -253,22 +254,14 @@ function ResultsContent({ id }: { id: string }) {
     </main>
   );
 
-  const hasHealthData = !!(product?.healthEffects);
+  const hasHealthData = true; // Always show health panel — either with data or a "coming soon" state
   const hasCapitalFlow = !!(product?.capitalFlow);
-  const hasLifecycle = !!(product?.lifecycle);
+  const hasLifecycle = !!(product?.lifecycle && (product.lifecycle.score > 0 || product.lifecycle.recyclable !== null || product.lifecycle.compostable !== null));
   const hasOrigin = !!(origin);
 
   return (
     <main className="min-h-screen bg-[#070b12] text-slate-100">
-      {/* NAV */}
-      <header className="sticky top-0 z-50 bg-[#070b12]/95 backdrop-blur border-b border-[#1e3a5f] h-12 flex items-center px-4 gap-3">
-        <Link href="/" className="text-cyan-400 font-bold text-sm flex-shrink-0" style={{fontFamily:"var(--font-manrope)"}}>BioLens</Link>
-        <span className="text-slate-600">/</span>
-        <span className="text-slate-400 text-sm truncate">{product?.name || value}</span>
-        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-          <Link href="/" className="text-xs text-slate-400 border border-[#1e3a5f] px-3 py-1.5 rounded-lg hover:text-white transition-colors">New Scan</Link>
-        </div>
-      </header>
+      <Nav breadcrumb={product?.name || value} />
 
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
 
@@ -324,7 +317,23 @@ function ResultsContent({ id }: { id: string }) {
             {hasHealthData && (
               <Panel title="Health Effects" ready={r("health")} skLines={6}>
                 {(() => {
-                  const h = product!.healthEffects!;
+                  const h = product?.healthEffects;
+                  if (!h) {
+                    return (
+                      <div className="space-y-3">
+                        <div className="p-3 rounded-xl border border-[#1a2d48] bg-[#0a1520]">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 bg-slate-700/15">🔬</div>
+                            <div className="flex-1">
+                              <p className="font-bold text-sm text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Health Screening Pending</p>
+                              <p className="text-xs text-slate-500 mt-0.5">Chemical risk assessment, exposure pathways, and toxicity screening are not yet available for this product.</p>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-500">BioLens is actively ingesting health data from PlastChem, EWG, and peer-reviewed sources. Check back soon.</p>
+                      </div>
+                    );
+                  }
                   const signal = safeStr(h.hazardSignal) || "unknown";
                   const hColors: Record<string,string> = {low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
                   const hc = hColors[signal.toLowerCase()] || "#475569";
@@ -344,45 +353,68 @@ function ResultsContent({ id }: { id: string }) {
                         </div>
                       </div>
 
-                      <div className="space-y-0">
-                        {[
+                      {(() => {
+                        const boolRows = [
                           {label:"Endocrine Disruption", value:h.endocrineDisruption, trueLabel:"Flagged", falseLabel:"Not detected"},
                           {label:"Carcinogenicity", value:h.carcinogenicity, trueLabel:"Flagged", falseLabel:"Not detected"},
                           {label:"Leachate / Chemical Risk", value:h.leachateRisk, trueLabel:"Risk present", falseLabel:"Not detected"},
-                        ].filter(item => item.value !== null && item.value !== undefined).map(({label,value,trueLabel,falseLabel}) => (
-                          <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
-                            <span className="text-sm text-slate-300">{label}</span>
-                            <BoolBadge value={value} trueLabel={trueLabel} falseLabel={falseLabel}/>
-                          </div>
-                        ))}
-                      </div>
+                        ].filter(item => item.value !== null && item.value !== undefined);
+                        const hasPathways = h.exposurePathways && h.exposurePathways.length > 0;
+                        const hasFlags = h.chemicalFlags && h.chemicalFlags.length > 0;
+                        const hasAnyDetail = boolRows.length > 0 || hasPathways || hasFlags;
 
-                      {h.exposurePathways && h.exposurePathways.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Exposure Pathways</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {h.exposurePathways.map((ep, i) => {
-                              const rc = ep.risk==="high"?"#ef4444":ep.risk==="moderate"?"#f59e0b":"#10b981";
-                              return (
-                                <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
-                                  <p className="text-xs font-semibold text-slate-300 capitalize">{safeStr(ep.type)}</p>
-                                  <p className="text-xs font-bold capitalize mt-0.5" style={{color:rc}}>{safeStr(ep.risk)} risk</p>
-                                  {ep.notes && <p className="text-xs text-slate-500 mt-0.5">{safeStr(ep.notes)}</p>}
+                        if (!hasAnyDetail) {
+                          return (
+                            <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
+                              <p className="text-xs text-slate-400 leading-relaxed">
+                                Detailed toxicity screening (endocrine disruption, carcinogenicity, exposure pathways) is not yet available for this product. BioLens is actively building chemical risk data — check back soon.
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <>
+                            {boolRows.length > 0 && (
+                              <div className="space-y-0">
+                                {boolRows.map(({label,value,trueLabel,falseLabel}) => (
+                                  <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
+                                    <span className="text-sm text-slate-300">{label}</span>
+                                    <BoolBadge value={value} trueLabel={trueLabel} falseLabel={falseLabel}/>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {hasPathways && (
+                              <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Exposure Pathways</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                  {h.exposurePathways!.map((ep, i) => {
+                                    const rc = ep.risk==="high"?"#ef4444":ep.risk==="moderate"?"#f59e0b":"#10b981";
+                                    return (
+                                      <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                                        <p className="text-xs font-semibold text-slate-300 capitalize">{safeStr(ep.type)}</p>
+                                        <p className="text-xs font-bold capitalize mt-0.5" style={{color:rc}}>{safeStr(ep.risk)} risk</p>
+                                        {ep.notes && <p className="text-xs text-slate-500 mt-0.5">{safeStr(ep.notes)}</p>}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                              </div>
+                            )}
 
-                      {h.chemicalFlags && h.chemicalFlags.length > 0 && (
-                        <div>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Chemical Flags</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {h.chemicalFlags.map((f, i) => <span key={i} className="text-xs px-2 py-0.5 rounded border text-red-400 bg-red-400/10 border-red-400/20">{safeStr(f)}</span>)}
-                          </div>
-                        </div>
-                      )}
+                            {hasFlags && (
+                              <div>
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Chemical Flags</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {h.chemicalFlags!.map((f, i) => <span key={i} className="text-xs px-2 py-0.5 rounded border text-red-400 bg-red-400/10 border-red-400/20">{safeStr(f)}</span>)}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   );
                 })()}

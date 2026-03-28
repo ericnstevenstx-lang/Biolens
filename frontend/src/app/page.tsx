@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Nav from "@/components/Nav";
 
 export default function HomePage() {
   const router = useRouter();
@@ -26,11 +27,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-[#070b12] text-slate-100 flex flex-col">
-      {/* NAV */}
-      <header className="border-b border-[#1e3a5f] h-12 flex items-center px-6">
-        <span className="text-cyan-400 font-bold text-sm" style={{fontFamily:"var(--font-manrope)"}}>BioLens</span>
-        <span className="ml-3 text-[10px] font-bold uppercase tracking-widest text-slate-600 border border-[#1e3a5f] px-2 py-0.5 rounded">Material Intelligence</span>
-      </header>
+      <Nav />
 
       {/* HERO */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">

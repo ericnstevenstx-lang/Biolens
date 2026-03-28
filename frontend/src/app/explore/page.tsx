@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Nav from "@/components/Nav";
 
 type MaterialCard = {
   slug: string;
@@ -58,6 +59,7 @@ export default async function ExplorePage() {
 
   return (
     <main className="min-h-screen bg-[#06131f] text-white">
+      <Nav />
       <section className="mx-auto max-w-6xl px-6 py-16">
         <div className="mb-10">
           <div className="mb-3 text-xs uppercase tracking-[0.28em] text-cyan-300/80">

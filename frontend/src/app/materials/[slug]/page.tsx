@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Nav from "@/components/Nav";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -276,33 +277,7 @@ export default function MaterialDetailPage() {
 
   return (
     <div className="min-h-screen bg-[#070b12] text-slate-100">
-      {/* Nav Header */}
-      <header className="sticky top-0 z-50 bg-[#070b12]/95 backdrop-blur border-b border-[#1e3a5f] h-12 flex items-center px-4 gap-6">
-        <a
-          href="/"
-          className="text-cyan-400 font-bold text-sm"
-          style={{ fontFamily: "var(--font-manrope)" }}
-        >
-          BioLens
-        </a>
-        <nav className="hidden sm:flex gap-4 ml-auto text-xs text-slate-400">
-          <a href="/" className="hover:text-white transition-colors">
-            Home
-          </a>
-          <a href="/explore" className="hover:text-white transition-colors">
-            Explore Materials
-          </a>
-          <a
-            href="/glossary"
-            className="hover:text-white transition-colors"
-          >
-            Glossary
-          </a>
-          <a href="/about" className="hover:text-white transition-colors">
-            About
-          </a>
-        </nav>
-      </header>
+      <Nav />
 
       <main className="max-w-4xl mx-auto px-4 pt-12 pb-20">
         {/* Loading */}

@@ -1,3 +1,5 @@
+import Nav from "@/components/Nav";
+
 export const metadata = {
   title: "FAQ | BioLens",
   description: "Frequently asked questions about BioLens material intelligence.",
@@ -6,16 +8,7 @@ export const metadata = {
 export default function FAQPage() {
   return (
     <div className="min-h-screen bg-[#070b12] text-slate-100" style={{ fontFamily: "var(--font-manrope)" }}>
-      {/* Nav Header */}
-      <header className="sticky top-0 z-50 bg-[#070b12]/95 backdrop-blur border-b border-[#1e3a5f] h-12 flex items-center px-4 gap-6">
-        <a href="/" className="text-cyan-400 font-bold text-sm" style={{ fontFamily: "var(--font-manrope)" }}>BioLens</a>
-        <nav className="hidden sm:flex gap-4 ml-auto text-xs text-slate-400">
-          <a href="/" className="hover:text-white transition-colors">Home</a>
-          <a href="/explore" className="hover:text-white transition-colors">Explore Materials</a>
-          <a href="/how-it-works" className="hover:text-white transition-colors">How It Works</a>
-          <a href="/about" className="hover:text-white transition-colors">About</a>
-        </nav>
-      </header>
+      <Nav />
 
       {/* Content */}
       <main className="max-w-3xl mx-auto px-4 py-12">
