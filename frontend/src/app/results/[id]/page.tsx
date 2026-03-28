@@ -314,8 +314,8 @@ function ResultsContent({ id }: { id: string }) {
           </div>
         )}
 
-        {/* ── SECTION 3: TWO-COLUMN — Health Alert + Tariff Impact ─────── */}
-        {(hasHealthData || hasCapitalFlow) && (
+        {/* ── 1. HEALTH + MATERIALS (consumer priority #1: "Is this hurting me?") ── */}
+        {(hasHealthData || (product?.materials && product.materials.length > 0)) && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* LEFT: Health Effects */}
             {hasHealthData && (
@@ -409,74 +409,42 @@ function ResultsContent({ id }: { id: string }) {
               </Panel>
             )}
 
-            {/* RIGHT: Capital Flow + Tariff Impact */}
-            {hasCapitalFlow && (
-              <Panel title="Capital Flow + Tariff Impact" ready={r("capitalFlow")} skLines={5}>
-                {(() => {
-                  const cf = product!.capitalFlow!;
-                  return (
-                    <div className="space-y-4">
-                      {/* Capital flow bar */}
-                      <div>
-                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                          <span>Domestic {cf.domesticRetentionPct.toFixed(1)}%</span>
-                          <span>Foreign {cf.foreignLeakagePct.toFixed(1)}%</span>
+            {/* RIGHT: Materials */}
+            {product?.materials && product.materials.length > 0 && (
+              <Panel title="Material Composition" ready={r("materials")} skLines={4}>
+                <div className="space-y-3">
+                  {product.materials.some(m => m.percentage !== undefined) && (
+                    <div className="h-3 rounded-full overflow-hidden flex gap-px mb-4">
+                      {product.materials.filter(m => m.percentage !== undefined).map((m, i) => {
+                        const c = m.classification==="bio"?"#10b981":m.classification==="bridge"?"#f59e0b":m.classification==="synthetic"?"#f97316":"#475569";
+                        return <div key={i} className="h-full" style={{width:`${m.percentage}%`,background:c}} title={`${m.name}: ${m.percentage}%`}/>;
+                      })}
+                    </div>
+                  )}
+                  {product.materials.map((mat, i) => {
+                    const c = mat.classification==="bio"?"#10b981":mat.classification==="bridge"?"#f59e0b":mat.classification==="synthetic"?"#f97316":"#475569";
+                    return (
+                      <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
+                        <div className="flex items-start justify-between gap-2">
+                          <a href={`/materials/${encodeURIComponent(safeStr(mat.name))}`} className="text-sm font-semibold text-white hover:text-cyan-400 transition-colors" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)} →</a>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0" style={{color:c,background:c+"15",border:`1px solid ${c}30`}}>{safeStr(mat.classification)}</span>
                         </div>
-                        <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
-                          <div className="h-full bg-emerald-500 transition-all duration-700" style={{width:`${cf.domesticRetentionPct}%`}}/>
-                          <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${cf.foreignLeakagePct}%`}}/>
-                        </div>
-                      </div>
-
-                      {/* Dollar breakdown if price available */}
-                      {cf.atPrice && (
-                        <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
-                          <p className="text-xs text-slate-400 mb-2">At ${cf.atPrice.price.toFixed(2)}</p>
-                          <div className="grid grid-cols-3 gap-2 text-center">
-                            <div>
-                              <p className="text-lg font-bold text-red-400">${cf.atPrice.tariffDrain.toFixed(2)}</p>
-                              <p className="text-[10px] text-slate-500">Tariff Drain</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-emerald-400">${cf.atPrice.domesticRetention.toFixed(2)}</p>
-                              <p className="text-[10px] text-slate-500">Domestic Retention</p>
-                            </div>
-                            <div>
-                              <p className="text-lg font-bold text-amber-400">${cf.atPrice.foreignLeakage.toFixed(2)}</p>
-                              <p className="text-[10px] text-slate-500">Foreign Leakage</p>
-                            </div>
+                        {mat.healthScore !== undefined && (
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1.5">
+                            <span>Health score</span>
+                            <span className="font-semibold" style={{color:mat.healthScore>70?"#10b981":mat.healthScore>40?"#f59e0b":"#ef4444"}}>{mat.healthScore}/100</span>
                           </div>
-                        </div>
-                      )}
-
-                      <div className="space-y-0">
-                        <Row label="Tariff Rate" value={`${cf.tariffRatePct.toFixed(1)}%`} highlight/>
-                        <Row label="Origin Country" value={cf.originCountry}/>
-                        {cf.domesticAlternativeTariffPct !== null && (
-                          <Row label="Domestic Alt. Tariff" value={`${cf.domesticAlternativeTariffPct.toFixed(1)}%`}/>
                         )}
                       </div>
-
-                      {/* Risk flags */}
-                      {(cf.section301Applies || cf.feocDisqualified || cf.uflpaRisk || cf.babaEligible) && (
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {cf.section301Applies && <RiskFlag flag="Section 301"/>}
-                          {cf.feocDisqualified && <RiskFlag flag="FEOC Exposure Risk"/>}
-                          {cf.uflpaRisk && <RiskFlag flag="UFLPA Risk"/>}
-                          {cf.babaEligible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">BABA Eligible</span>}
-                        </div>
-                      )}
-
-                      <div className="pt-2 flex justify-end"><Confidence level={safeStr(cf.confidence)}/></div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })}
+                </div>
               </Panel>
             )}
           </div>
         )}
 
-        {/* ── CORPORATE POLITICAL ACTIVITY ──────────────────────────────── */}
+        {/* ── 2. POLITICAL ACTIVITY ("Where does my money go?") ────────── */}
         {product?.politicalActivity && (
           <Panel title="Corporate Political Activity" ready={r("politicalActivity")} skLines={4}>
             {(() => {
@@ -536,112 +504,57 @@ function ResultsContent({ id }: { id: string }) {
           </Panel>
         )}
 
-        {/* ── SECTION 4: PETROLOAD GAUGE + MATERIALS (horizontal) ───────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Gauge */}
-          <Panel title="Petroload Index" ready={r("gauge")} skLines={1}>
-            <PetroGauge score={score}/>
-            {product?.materialInsight && (
-              <div className="mt-4 p-3 bg-cyan-400/5 border border-cyan-400/20 rounded-xl">
-                <p className="text-xs font-bold text-cyan-400 mb-1">{safeStr(product.materialInsight.headline)}</p>
-                <p className="text-xs text-slate-400 leading-relaxed">{safeStr(product.materialInsight.body)}</p>
-              </div>
-            )}
-          </Panel>
-
-          {/* Materials */}
-          {product?.materials && product.materials.length > 0 && (
-            <Panel title="Material Intelligence" ready={r("materials")} skLines={4}>
-              <div className="space-y-3">
-                {product.materials.some(m => m.percentage !== undefined) && (
-                  <div className="h-3 rounded-full overflow-hidden flex gap-px mb-4">
-                    {product.materials.filter(m => m.percentage !== undefined).map((m, i) => {
-                      const c = m.classification==="bio"?"#10b981":m.classification==="bridge"?"#f59e0b":m.classification==="synthetic"?"#f97316":"#475569";
-                      return <div key={i} className="h-full" style={{width:`${m.percentage}%`,background:c}} title={`${m.name}: ${m.percentage}%`}/>;
-                    })}
-                  </div>
-                )}
-                {product.materials.map((mat, i) => {
-                  const c = mat.classification==="bio"?"#10b981":mat.classification==="bridge"?"#f59e0b":mat.classification==="synthetic"?"#f97316":"#475569";
+        {/* ── 3. CAPITAL FLOW + ORIGIN (economic impact) ───────────────── */}
+        {(hasCapitalFlow || hasOrigin) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* LEFT: Capital Flow */}
+            {hasCapitalFlow && (
+              <Panel title="Capital Flow + Tariff Impact" ready={r("capitalFlow")} skLines={5}>
+                {(() => {
+                  const cf = product!.capitalFlow!;
                   return (
-                    <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
-                      <div className="flex items-start justify-between gap-2">
-                        <a href={`/materials/${encodeURIComponent(safeStr(mat.name))}`} className="text-sm font-semibold text-white hover:text-cyan-400 transition-colors" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)} →</a>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0" style={{color:c,background:c+"15",border:`1px solid ${c}30`}}>{safeStr(mat.classification)}</span>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Domestic {cf.domesticRetentionPct.toFixed(1)}%</span>
+                          <span>Foreign {cf.foreignLeakagePct.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
+                          <div className="h-full bg-emerald-500 transition-all duration-700" style={{width:`${cf.domesticRetentionPct}%`}}/>
+                          <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${cf.foreignLeakagePct}%`}}/>
+                        </div>
                       </div>
-                      {mat.healthScore !== undefined && (
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1.5">
-                          <span>Health score</span>
-                          <span className="font-semibold" style={{color:mat.healthScore>70?"#10b981":mat.healthScore>40?"#f59e0b":"#ef4444"}}>{mat.healthScore}/100</span>
+                      {cf.atPrice && (
+                        <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                          <p className="text-xs text-slate-400 mb-2">At ${cf.atPrice.price.toFixed(2)}</p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div><p className="text-lg font-bold text-red-400">${cf.atPrice.tariffDrain.toFixed(2)}</p><p className="text-[10px] text-slate-500">Tariff Drain</p></div>
+                            <div><p className="text-lg font-bold text-emerald-400">${cf.atPrice.domesticRetention.toFixed(2)}</p><p className="text-[10px] text-slate-500">Domestic Retention</p></div>
+                            <div><p className="text-lg font-bold text-amber-400">${cf.atPrice.foreignLeakage.toFixed(2)}</p><p className="text-[10px] text-slate-500">Foreign Leakage</p></div>
+                          </div>
                         </div>
                       )}
-                    </div>
-                  );
-                })}
-              </div>
-            </Panel>
-          )}
-        </div>
-
-        {/* ── SECTION 5: TWO-COLUMN — Lifecycle + Origin Intelligence ──── */}
-        {(hasLifecycle || hasOrigin) && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Lifecycle */}
-            {hasLifecycle && (
-              <Panel title="Lifecycle Intelligence" ready={r("lifecycle")} skLines={5}>
-                {(() => {
-                  const lc = product!.lifecycle!;
-                  const sc = lc.score ?? 0;
-                  const scolor = sc>=70?"#10b981":sc>=40?"#f59e0b":"#ef4444";
-                  const mpColors: Record<string,string> = {none:"#10b981",low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
-                  const mp = safeStr(lc.microplasticRisk).toLowerCase() || "unknown";
-                  return (
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-xs text-slate-400">Lifecycle Score</span>
-                          <span className="font-black text-xl" style={{color:scolor,fontFamily:"var(--font-manrope)"}}>{sc}</span>
-                        </div>
-                        <div className="h-2 bg-[#1a2d48] rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-700" style={{width:`${sc}%`,background:scolor}}/>
-                        </div>
-                      </div>
                       <div className="space-y-0">
-                        {[{label:"Recyclable",value:lc.recyclable},{label:"Compostable",value:lc.compostable}]
-                          .filter(item => item.value !== null && item.value !== undefined)
-                          .map(({label,value}) => (
-                            <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
-                              <span className="text-sm text-slate-300">{label}</span>
-                              <BoolBadge value={value}/>
-                            </div>
-                          ))}
-                        {mp !== "unknown" && (
-                          <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
-                            <span className="text-sm text-slate-300">Microplastic Risk</span>
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize" style={{color:mpColors[mp]||"#475569",background:(mpColors[mp]||"#475569")+"15"}}>{mp}</span>
-                          </div>
-                        )}
-                        {lc.landfillPersistenceYears !== undefined && (
-                          <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
-                            <span className="text-sm text-slate-300">Landfill Persistence</span>
-                            <span className="text-sm font-semibold text-amber-400">~{lc.landfillPersistenceYears.toLocaleString()} years</span>
-                          </div>
-                        )}
-                        {lc.endOfLifePathway && (
-                          <div className="flex items-start justify-between gap-4 py-2.5">
-                            <span className="text-sm text-slate-300 flex-shrink-0">End-of-Life</span>
-                            <span className="text-sm text-slate-300 text-right">{safeStr(lc.endOfLifePathway)}</span>
-                          </div>
-                        )}
+                        <Row label="Tariff Rate" value={`${cf.tariffRatePct.toFixed(1)}%`} highlight/>
+                        <Row label="Origin Country" value={cf.originCountry}/>
+                        {cf.domesticAlternativeTariffPct !== null && <Row label="Domestic Alt. Tariff" value={`${cf.domesticAlternativeTariffPct.toFixed(1)}%`}/>}
                       </div>
-                      <div className="pt-2 flex justify-end"><Confidence level={safeStr(lc.confidence)}/></div>
+                      {(cf.section301Applies || cf.feocDisqualified || cf.uflpaRisk || cf.babaEligible) && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {cf.section301Applies && <RiskFlag flag="Section 301"/>}
+                          {cf.feocDisqualified && <RiskFlag flag="FEOC Exposure Risk"/>}
+                          {cf.uflpaRisk && <RiskFlag flag="UFLPA Risk"/>}
+                          {cf.babaEligible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">BABA Eligible</span>}
+                        </div>
+                      )}
+                      <div className="pt-2 flex justify-end"><Confidence level={safeStr(cf.confidence)}/></div>
                     </div>
                   );
                 })()}
               </Panel>
             )}
 
-            {/* Origin Intelligence */}
+            {/* RIGHT: Origin Intelligence */}
             {hasOrigin && (
               <Panel title="Origin Intelligence" ready={r("origin")} skLines={5}>
                 {(() => {
@@ -685,6 +598,19 @@ function ResultsContent({ id }: { id: string }) {
             )}
           </div>
         )}
+
+        {/* ── 4. PETROLOAD GAUGE (supporting detail) ──────────────────── */}
+        <Panel title="Petroload Index" ready={r("gauge")} skLines={1}>
+          <div className="flex flex-col items-center">
+            <PetroGauge score={score}/>
+            {product?.materialInsight && (
+              <div className="mt-4 p-3 bg-cyan-400/5 border border-cyan-400/20 rounded-xl w-full max-w-md">
+                <p className="text-xs font-bold text-cyan-400 mb-1">{safeStr(product.materialInsight.headline)}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{safeStr(product.materialInsight.body)}</p>
+              </div>
+            )}
+          </div>
+        </Panel>
 
         {/* ── SECTION 6: BETTER ALTERNATIVES / WHERE TO BUY ────────────── */}
         {product?.alternatives && product.alternatives.length > 0 && (
