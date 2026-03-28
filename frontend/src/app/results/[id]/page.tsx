@@ -486,7 +486,7 @@ function ResultsContent({ id }: { id: string }) {
                   return (
                     <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)}</p>
+                        <a href={`/materials/${encodeURIComponent(safeStr(mat.name))}`} className="text-sm font-semibold text-white hover:text-cyan-400 transition-colors" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)} →</a>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0" style={{color:c,background:c+"15",border:`1px solid ${c}30`}}>{safeStr(mat.classification)}</span>
                       </div>
                       {mat.healthScore !== undefined && (
