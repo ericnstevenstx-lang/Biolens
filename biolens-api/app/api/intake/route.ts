@@ -101,10 +101,14 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     html,
     /<span[^>]+id="productTitle"[^>]*>\s*([\s\S]*?)\s*</i
   );
-  const brand = extractFromHtml(
+  let brand = extractFromHtml(
     html,
     /id="bylineInfo"[^>]*>[\s\S]*?<a[^>]*>([^<]+)</i
   ) || extractFromHtml(html, /"brand"\s*:\s*"([^"]+)"/i);
+  // Clean up "Visit the X Store" -> "X"
+  if (brand) {
+    brand = brand.replace(/^Visit the\s+/i, "").replace(/\s+Store$/i, "").trim();
+  }
   const imageUrl = extractFromHtml(
     html,
     /id="landingImage"[^>]+src="([^"]+)"/i
@@ -179,8 +183,13 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     /Country of Origin\s*<\/th>\s*<td[^>]*>\s*([^<]{2,60})/i
   );
 
-  // Extract certifications (OEKO-TEX, GOTS, Fair Trade, etc.)
+  // Extract certifications from Amazon's sustainability section only
+  // (not the whole page, which mentions FSC in packaging policy text)
   const certifications: string[] = [];
+  const sustainabilityMatch = html.match(/Sustainability features[\s\S]{0,3000}?(?=<\/div>\s*<\/div>\s*<\/div>|$)/i);
+  const certZone = sustainabilityMatch ? sustainabilityMatch[0] : "";
+  // Also check bullet points for cert claims
+  const certText = certZone + " " + (bullets || []).join(" ");
   const certPatterns = [
     { pattern: /OEKO-TEX/i, label: "OEKO-TEX" },
     { pattern: /STANDARD 100/i, label: "STANDARD 100" },
@@ -188,7 +197,7 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     { pattern: /Fair Trade/i, label: "Fair Trade" },
     { pattern: /USDA Organic/i, label: "USDA Organic" },
     { pattern: /Global Recycled Standard/i, label: "GRS Certified" },
-    { pattern: /FSC/i, label: "FSC Certified" },
+    { pattern: /FSC.{0,20}Certified/i, label: "FSC Certified" },
     { pattern: /B Corp/i, label: "B Corp" },
     { pattern: /Cradle to Cradle/i, label: "Cradle to Cradle" },
     { pattern: /GREENGUARD/i, label: "GREENGUARD" },
@@ -196,15 +205,17 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     { pattern: /bluesign/i, label: "bluesign" },
   ];
   for (const { pattern, label } of certPatterns) {
-    if (pattern.test(html) && !certifications.includes(label)) {
+    if (pattern.test(certText) && !certifications.includes(label)) {
       certifications.push(label);
     }
   }
 
-  // Infer material from title/bullets if not found in product details
-  const inferredMaterial = material || inferMaterialFromText(
-    [title, description, ...(bullets || [])].filter(Boolean).join(" ")
-  );
+  // Parse ALL materials from fabric/material type field + title + bullets
+  // e.g. "Front: Velvet, Reverse: Washed Microfiber, Filling: Polyester" -> multiple materials
+  const allText = [material, title, description, ...(bullets || [])].filter(Boolean).join(" ");
+  const inferredMaterial = inferMaterialFromText(allText);
+  // Also extract additional materials from the fabric type string
+  const additionalMaterials = material ? inferAllMaterialsFromText(material) : [];
 
   return {
     asin,
@@ -223,10 +234,47 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
       url: rawUrl,
       scraped: true,
       extractedMaterial: inferredMaterial || undefined,
+      allExtractedMaterials: additionalMaterials.length ? additionalMaterials : undefined,
+      fabricType: material || undefined,
       price: priceStr ? Number(priceStr) : undefined,
       certifications: certifications.length ? certifications : undefined,
     },
   };
+}
+
+// Infer ALL materials from text (e.g. fabric type field with multiple materials)
+function inferAllMaterialsFromText(text: string): string[] {
+  if (!text) return [];
+  const lower = text.toLowerCase();
+  const found: string[] = [];
+  const materials: [string, string][] = [
+    ["100% polyester", "Polyester"],
+    ["100% cotton", "Cotton"],
+    ["100% nylon", "Nylon"],
+    ["polyester", "Polyester"],
+    ["cotton", "Cotton"],
+    ["microfiber", "Microfiber"],
+    ["velvet", "Velvet"],
+    ["fleece", "Fleece"],
+    ["linen", "Linen"],
+    ["silk", "Silk"],
+    ["wool", "Wool"],
+    ["nylon", "Nylon"],
+    ["spandex", "Spandex"],
+    ["rayon", "Rayon"],
+    ["viscose", "Viscose"],
+    ["bamboo", "Bamboo"],
+    ["hemp", "Hemp"],
+    ["acrylic", "Acrylic"],
+    ["satin", "Satin"],
+    ["denim", "Denim"],
+  ];
+  for (const [pattern, name] of materials) {
+    if (lower.includes(pattern) && !found.includes(name)) {
+      found.push(name);
+    }
+  }
+  return found;
 }
 
 // Infer primary material from text content (title, description, bullets)
@@ -674,18 +722,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let intelligence = await enrichByProductId(productId);
 
     if (intelligence.materials.length === 0) {
-      // Build search terms from extracted material, title, or raw query
+      // Build search terms from extracted materials, title, or raw query
       const searchTerms: string[] = [];
+      const allMats = (extracted.rawPayload as any)?.allExtractedMaterials as string[] | undefined;
       const extractedMaterial = (extracted.rawPayload as any)?.extractedMaterial;
-      if (extractedMaterial) searchTerms.push(extractedMaterial);
+      // Add individual materials first (most specific)
+      if (allMats && allMats.length > 0) {
+        for (const mat of allMats) searchTerms.push(mat);
+      } else if (extractedMaterial) {
+        searchTerms.push(extractedMaterial);
+      }
       if (extracted.title && extracted.title !== value) searchTerms.push(extracted.title);
       searchTerms.push(value);
 
-      // Try each search term until we find materials
+      // Try all extracted material names first, then fall back to title/query
       let fallbackGraphMaterials: any[] = [];
-      for (const term of searchTerms) {
-        fallbackGraphMaterials = await enrichByMaterialNames([term]);
-        if (fallbackGraphMaterials.length > 0) break;
+      if (allMats && allMats.length > 0) {
+        // Search all extracted materials at once
+        fallbackGraphMaterials = await enrichByMaterialNames(allMats);
+      }
+      if (fallbackGraphMaterials.length === 0) {
+        // Fall back to searching by each term individually
+        for (const term of searchTerms) {
+          fallbackGraphMaterials = await enrichByMaterialNames([term]);
+          if (fallbackGraphMaterials.length > 0) break;
+        }
       }
 
       if (fallbackGraphMaterials.length) {
