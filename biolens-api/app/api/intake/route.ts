@@ -5,6 +5,8 @@ import {
   enrichByProductId,
   enrichByMaterialNames,
   normalizeIntelligence,
+  fetchConcernAssessmentsForMaterials,
+  resolveCapitalFlow,
 } from "@/lib/intelligence/enrich";
 
 type InputType = "barcode" | "amazon" | "url" | "search";
@@ -472,7 +474,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (intelligence.materials.length === 0 && inputType === "search") {
       const fallbackGraphMaterials = await enrichByMaterialNames([value]);
       if (fallbackGraphMaterials.length) {
-        intelligence = normalizeIntelligence(null, fallbackGraphMaterials);
+        const materialNames = fallbackGraphMaterials.map((g) => g.material);
+        const [concerns, capitalFlow] = await Promise.all([
+          fetchConcernAssessmentsForMaterials(materialNames),
+          resolveCapitalFlow(productId, null, materialNames),
+        ]);
+        intelligence = normalizeIntelligence(null, fallbackGraphMaterials, capitalFlow, concerns);
       }
     }
 

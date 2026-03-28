@@ -254,7 +254,7 @@ function ResultsContent({ id }: { id: string }) {
     </main>
   );
 
-  const hasHealthData = true; // Always show health panel — either with data or a "coming soon" state
+  const hasHealthData = !!(product?.healthEffects);
   const hasCapitalFlow = !!(product?.capitalFlow);
   const hasLifecycle = !!(product?.lifecycle && (product.lifecycle.score > 0 || product.lifecycle.recyclable !== null || product.lifecycle.compostable !== null));
   const hasOrigin = !!(origin);
@@ -317,23 +317,7 @@ function ResultsContent({ id }: { id: string }) {
             {hasHealthData && (
               <Panel title="Health Effects" ready={r("health")} skLines={6}>
                 {(() => {
-                  const h = product?.healthEffects;
-                  if (!h) {
-                    return (
-                      <div className="space-y-3">
-                        <div className="p-3 rounded-xl border border-[#1a2d48] bg-[#0a1520]">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 bg-slate-700/15">🔬</div>
-                            <div className="flex-1">
-                              <p className="font-bold text-sm text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Health Screening Pending</p>
-                              <p className="text-xs text-slate-500 mt-0.5">Chemical risk assessment, exposure pathways, and toxicity screening are not yet available for this product.</p>
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-500">BioLens is actively ingesting health data from PlastChem, EWG, and peer-reviewed sources. Check back soon.</p>
-                      </div>
-                    );
-                  }
+                  const h = product!.healthEffects!;
                   const signal = safeStr(h.hazardSignal) || "unknown";
                   const hColors: Record<string,string> = {low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
                   const hc = hColors[signal.toLowerCase()] || "#475569";

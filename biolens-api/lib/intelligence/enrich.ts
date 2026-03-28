@@ -584,7 +584,7 @@ export async function enrichByMaterialNames(names: string[]): Promise<GraphMater
  * Resolve capital flow / tariff data for a product.
  * Pulls from product_origin_profile, tariff_comparisons, and supply_chain_resilience_profile.
  */
-async function resolveCapitalFlow(
+export async function resolveCapitalFlow(
   productId: string,
   displayPrice?: number | null,
   materialNames: string[] = []
