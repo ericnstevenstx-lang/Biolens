@@ -523,6 +523,7 @@ async function enrichMaterialsFromNeo4j(names: string[]): Promise<GraphMaterial[
 
 /**
  * Fetch concern assessments directly for a list of material names.
+ * Uses the get_concerns_for_materials RPC which does a proper SQL join.
  * Used when the RPC health_concerns is empty (e.g. search-originated products).
  */
 export async function fetchConcernAssessmentsForMaterials(
@@ -531,33 +532,12 @@ export async function fetchConcernAssessmentsForMaterials(
   if (!materialNames.length) return []
   try {
     const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase
-      .from('material_concern_assessments')
-      .select(`
-        concern_score,
-        concern_tier,
-        concern_status,
-        consumer_facing_note,
-        materials!inner ( material_name ),
-        toxicity_concern_categories!inner ( code, name, concern_domain )
-      `)
-      .in('materials.material_name', materialNames)
-      .in('concern_tier', ['high', 'very_high'])
-      .order('concern_score', { ascending: false })
-      .limit(20)
+    const { data, error } = await supabase.rpc('get_concerns_for_materials', {
+      p_material_names: materialNames,
+    })
 
     if (error || !data) return []
-
-    return data.map((row: any) => ({
-      material_name: row.materials?.material_name,
-      concern_code: row.toxicity_concern_categories?.code,
-      concern_name: row.toxicity_concern_categories?.name,
-      concern_domain: row.toxicity_concern_categories?.concern_domain,
-      concern_score: row.concern_score,
-      concern_tier: row.concern_tier,
-      concern_status: row.concern_status,
-      consumer_note: row.consumer_facing_note,
-    }))
+    return Array.isArray(data) ? data : []
   } catch (err) {
     console.error('Concern assessment fetch failed:', err)
     return []
