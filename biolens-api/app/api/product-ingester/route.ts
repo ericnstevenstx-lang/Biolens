@@ -35,7 +35,29 @@ const DEFAULT_QUERIES = [
   'sponge', 'paper towels', 'trash bags', 'ziplock bags',
   // Textiles
   'cotton shirt', 'polyester', 'nylon', 'microfiber cloth',
+  // Additional high-coverage queries
+  'makeup', 'mascara', 'foundation', 'nail polish', 'perfume',
+  'shower gel', 'bath bomb', 'soap bar', 'shaving cream', 'aftershave',
+  'hair spray', 'hair dye', 'dry shampoo', 'beard oil',
+  'cleaning spray', 'floor cleaner', 'oven cleaner', 'toilet cleaner',
+  'air freshener', 'candle', 'insect repellent', 'hand cream',
+  'baby food', 'baby bottle', 'diaper', 'baby powder',
+  'plastic wrap', 'aluminum foil', 'food container', 'water bottle',
+  'kitchen sponge', 'dish rack', 'cutting board', 'food storage',
+  'laundry pods', 'dryer sheets', 'detergent pods',
+  'yoga mat', 'gym bag', 'water filter', 'reusable bag',
 ]
+
+// Rotation queries by day of week for variety
+const DAY_QUERIES: Record<number, string[]> = {
+  0: ['plastic container', 'food wrap', 'storage bag', 'tupperware', 'cling film', 'beeswax wrap', 'silicone mat', 'parchment paper', 'wax paper', 'freezer bag', 'vacuum bag', 'produce bag', 'compost bag', 'biodegradable bag', 'reusable straw'],
+  1: ['baby formula', 'baby cereal', 'baby snack', 'pacifier', 'teether', 'sippy cup', 'bib', 'nursing pad', 'breast pump', 'bottle brush', 'sterilizer', 'changing pad', 'wet wipe', 'rash cream', 'baby oil'],
+  2: ['kitchen towel', 'dish cloth', 'scrub brush', 'mop', 'broom', 'dustpan', 'vacuum bag', 'lint roller', 'rubber glove', 'scouring pad', 'steel wool', 'magic eraser', 'furniture polish', 'wood cleaner', 'carpet cleaner'],
+  3: ['cotton towel', 'bath mat', 'shower curtain', 'curtain', 'bedsheet', 'pillowcase', 'duvet cover', 'blanket', 'throw pillow', 'mattress pad', 'mattress protector', 'quilt', 'comforter', 'sleeping bag', 'towel set'],
+  4: ['face mask', 'serum', 'toner', 'eye cream', 'acne treatment', 'exfoliant', 'micellar water', 'cleansing oil', 'face mist', 'sheet mask', 'clay mask', 'face scrub', 'retinol', 'vitamin c serum', 'hyaluronic acid'],
+  5: ['snack bar', 'protein bar', 'energy drink', 'sports drink', 'juice', 'smoothie', 'cereal', 'oatmeal', 'granola', 'trail mix', 'chips', 'crackers', 'cookies', 'candy', 'chocolate'],
+  6: ['hemp oil', 'bamboo brush', 'organic soap', 'natural deodorant', 'mineral sunscreen', 'plant based', 'vegan leather', 'recycled plastic', 'biodegradable', 'compostable', 'zero waste', 'refillable', 'sustainable', 'eco friendly', 'organic cotton'],
+}
 
 interface OFFProduct {
   code: string
@@ -48,6 +70,7 @@ interface OFFProduct {
   manufacturing_places?: string
   countries?: string
   stores?: string
+  price?: string | number
   labels?: string
   packaging?: string
   quantity?: string
@@ -185,6 +208,7 @@ export async function POST(req: Request) {
               .limit(1)
 
             if (!existingProd || existingProd.length === 0) {
+              const price = p.price ? parseFloat(String(p.price)) : null
               const { data: newProd, error: promoteErr } = await supabase
                 .from('products')
                 .insert({
@@ -198,6 +222,7 @@ export async function POST(req: Request) {
                   source_type: apiSource,
                   source_id: productUrl(apiSource, p.code),
                   image_url: p.image_url || null,
+                  display_price: price && !isNaN(price) ? price : null,
                 })
                 .select('id')
                 .single()
@@ -248,10 +273,25 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({
-    status: 'ready',
-    description: 'BioLens Product Ingester — POST with {queries: string[], pages_per_query: number}',
-    default_queries: DEFAULT_QUERIES.length,
+export async function GET(req: Request) {
+  // Vercel cron hits GET - trigger ingestion with day-rotation queries
+  const dayOfWeek = new Date().getDay()
+  const dayQueries = DAY_QUERIES[dayOfWeek] || DAY_QUERIES[0]
+
+  // Alternate between OFF, OBF, OPF sources each day
+  const sources: Array<'off' | 'obf' | 'opf'> = ['off', 'obf', 'opf']
+  const source = sources[dayOfWeek % 3]
+
+  // Build a mock request and call POST logic
+  const mockReq = new Request(req.url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      queries: dayQueries,
+      pages_per_query: 2,
+      source,
+    }),
   })
+
+  return POST(mockReq)
 }
