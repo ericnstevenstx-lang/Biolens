@@ -478,6 +478,9 @@ function ResultsContent({ id }: { id: string }) {
               const pa = product.politicalActivity;
               return (
                 <div className="space-y-4">
+                  {/* Framing sentence */}
+                  <p className="text-xs text-slate-500 leading-relaxed">Publicly reported political contributions associated with this company and its policy influence footprint.</p>
+
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{pa.companyName}</p>
@@ -485,7 +488,7 @@ function ResultsContent({ id }: { id: string }) {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-lg font-black text-white" style={{fontFamily:"var(--font-manrope)"}}>${pa.totalContributions.toLocaleString()}</p>
-                      <p className="text-[10px] text-slate-500">{pa.cycle} cycle</p>
+                      <p className="text-[10px] text-slate-500">{pa.cycle} Federal Election Cycle</p>
                     </div>
                   </div>
 
@@ -520,6 +523,11 @@ function ResultsContent({ id }: { id: string }) {
                       </div>
                     </div>
                   )}
+
+                  {/* Connection to product */}
+                  <div className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                    <p className="text-[10px] text-slate-500 leading-relaxed">Manufacturer participates in federal political contributions linked to industry and regulatory policy.</p>
+                  </div>
 
                   <div className="pt-1 flex items-center justify-between">
                     <span className="text-[10px] text-slate-600">Source: FEC.gov public filings</span>
