@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
 
 interface Suggestion { label: string; materialFamily: string | null; petroloadScore: number | null; alternativesCount: number; }
 
@@ -58,7 +59,7 @@ export default function HomePage() {
   }
 
   const placeholders: Record<string, string> = {
-    search: "Search a product or material — e.g. Tide Pods, polyester, bamboo",
+    search: "Search a product or material, e.g. Tide Pods, polyester, bamboo",
     barcode: "Enter a barcode number",
     amazon: "Paste an Amazon product URL",
     url: "Paste any product page URL",
@@ -78,7 +79,7 @@ export default function HomePage() {
               <span className="text-cyan-400">really made of?</span>
             </h1>
             <p className="text-slate-400 text-lg">
-              BioLens analyzes any product across five intelligence layers — materials, health, origin, lifecycle, and alternatives.
+              BioLens analyzes any product across five intelligence layers: materials, health, origin, lifecycle, and alternatives.
             </p>
           </div>
 
@@ -184,8 +185,7 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+      <Footer />
     </main>
   );
 }
-// deployed 1774674681
-// v2

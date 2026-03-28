@@ -353,7 +353,7 @@ function ResultsContent({ id }: { id: string }) {
                           return (
                             <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
                               <p className="text-xs text-slate-400 leading-relaxed">
-                                Detailed toxicity screening (endocrine disruption, carcinogenicity, exposure pathways) is not yet available for this product. BioLens is actively building chemical risk data — check back soon.
+                                Detailed toxicity screening (endocrine disruption, carcinogenicity, exposure pathways) is not yet available for this product. BioLens is actively building chemical risk data. Check back soon.
                               </p>
                             </div>
                           );

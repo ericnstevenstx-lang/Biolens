@@ -7,10 +7,10 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", weight: ["40
 const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair", weight: ["400","500","600","700"], style: ["normal","italic"], display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "BioLens — Material Intelligence", template: "%s | BioLens" },
+  title: { default: "BioLens - Material Intelligence", template: "%s | BioLens" },
   description: "Reveal the hidden petrochemical, origin, and lifecycle systems behind everyday products.",
   openGraph: {
-    title: "BioLens — Material Intelligence",
+    title: "BioLens - Material Intelligence",
     description: "See what products are really made of. Analyze materials, health risks, tariff exposure, and lifecycle impact.",
     images: [{ url: "/assets/biolens light.png", width: 1400, height: 930, alt: "BioLens Material Intelligence" }],
     siteName: "BioLens",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "BioLens — Material Intelligence",
+    title: "BioLens - Material Intelligence",
     description: "See what products are really made of.",
     images: ["/assets/biolens light.png"],
   },
@@ -35,4 +35,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-// BioLens Material Intelligence — 2026

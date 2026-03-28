@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
 
 type MaterialCard = {
   slug: string;
@@ -122,6 +123,7 @@ export default async function ExplorePage() {
           </div>
         )}
       </section>
+      <Footer />
     </main>
   );
 }

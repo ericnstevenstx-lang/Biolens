@@ -1,12 +1,13 @@
 import Link from "next/link";
 import Nav from "@/components/Nav";
+import Footer from "@/components/Footer";
 
 const steps = [
   {
     number: 1,
     title: "Search a product",
     description:
-      "Type any everyday product — a hoodie, toothbrush, rope, blanket, or cutting board.",
+      "Type any everyday product: a hoodie, toothbrush, rope, blanket, or cutting board.",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
@@ -28,7 +29,7 @@ const steps = [
     number: 3,
     title: "Understand the classification",
     description:
-      "Learn whether the material is petroleum-based, plant-based, or a transition material — and what that means.",
+      "Learn whether the material is petroleum-based, plant-based, or a transition material, and what that means.",
     icon: (
       <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z" />
@@ -82,7 +83,7 @@ export default function HowItWorksPage() {
           How BioLens Works
         </h1>
         <p className="text-slate-400 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
-          Four simple steps to understand any product&apos;s material composition and make better choices — plus two intelligence layers that go deeper.
+          Six steps to understand any product&apos;s material composition, health risks, and economic impact.
         </p>
       </section>
 
@@ -123,7 +124,7 @@ export default function HowItWorksPage() {
 
         {/* Note about intelligence layers */}
         <p className="text-center text-slate-500 text-sm mb-8">
-          Steps 5 and 6 represent BioLens&apos;s deeper analysis — powered by health science data and economic modeling.
+          Steps 5 and 6 represent deeper analysis, powered by health science data and economic modeling.
         </p>
       </section>
 
@@ -141,41 +142,7 @@ export default function HowItWorksPage() {
         </Link>
       </section>
 
-      {/* Footer */}
-      <div className="border-t border-[#1a2d48] mt-12 pt-8 pb-10">
-        <div className="max-w-5xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div>
-            <p className="text-cyan-400 font-bold text-sm mb-2">BioLens</p>
-            <p className="text-xs text-slate-500 leading-relaxed">See what your products are really made of. Understand materials, reduce petroleum dependency, make better choices.</p>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Navigate</p>
-            <div className="space-y-1.5">
-              <a href="/" className="block text-xs text-slate-500 hover:text-slate-300">Home</a>
-              <a href="/explore" className="block text-xs text-slate-500 hover:text-slate-300">Explore Materials</a>
-              <a href="/how-it-works" className="block text-xs text-slate-500 hover:text-slate-300">How It Works</a>
-              <a href="/glossary" className="block text-xs text-slate-500 hover:text-slate-300">Glossary</a>
-              <a href="/about" className="block text-xs text-slate-500 hover:text-slate-300">About</a>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">About</p>
-            <p className="text-xs text-slate-500 leading-relaxed">BioLens is a free educational tool that helps consumers understand the materials in everyday products. No sales. No politics. Just clarity.</p>
-            <div className="flex gap-4 mt-3 text-xs text-slate-600">
-              <a href="https://nowweevolve.com" target="_blank" rel="noopener" className="hover:text-slate-400">Now We Evolve</a>
-              <a href="https://bioeconomyfoundation.org" target="_blank" rel="noopener" className="hover:text-slate-400">BioeconomyFoundation.org</a>
-              <a href="https://fiberfoundry.co" target="_blank" rel="noopener" className="hover:text-slate-400">FiberFoundry</a>
-            </div>
-          </div>
-        </div>
-        <div className="max-w-5xl mx-auto px-4 mt-8 pt-4 border-t border-[#1a2d48] flex justify-between text-xs text-slate-600">
-          <span>2026 BioLens. Built for transparency.</span>
-          <div className="flex gap-4">
-            <a href="/privacy" className="hover:text-slate-400">Privacy</a>
-            <a href="/terms" className="hover:text-slate-400">Terms</a>
-          </div>
-        </div>
-      </div>
+      <Footer />
     </div>
   );
 }

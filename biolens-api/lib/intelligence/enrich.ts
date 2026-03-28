@@ -1010,7 +1010,7 @@ export function normalizeIntelligence(
     const scoreText = petroloadIndex === null ? 'unknown' : `${petroloadIndex}/100`
 
     materialInsight = {
-      headline: `${top.name} — ${label}`,
+      headline: `${top.name} - ${label}`,
       body:
         top.notes ??
         `Primary material scored ${scoreText} on the petroload index.${materials.length > 1 ? ` ${materials.length} materials analyzed.` : ''}`,
