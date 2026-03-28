@@ -234,10 +234,12 @@ function ResultsContent({ id }: { id: string }) {
 
   if (stage === "loading") return (
     <main className="min-h-screen bg-[#070b12] flex items-center justify-center">
-      <div className="text-center space-y-3">
-        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"/>
-        <p className="text-slate-400 text-sm">Analyzing materials...</p>
-        <p className="text-slate-600 text-xs">Resolving origin · Scoring petroload · Ranking alternatives</p>
+      <div className="text-center space-y-5">
+        <img src="/assets/Biolens Splash screen.png" alt="BioLens analyzing" width={200} height={300} className="mx-auto animate-pulse" style={{filter:"drop-shadow(0 0 20px rgba(6,182,212,0.3))"}}/>
+        <div className="space-y-2">
+          <p className="text-slate-300 text-sm font-semibold" style={{fontFamily:"var(--font-manrope)"}}>Analyzing materials...</p>
+          <p className="text-slate-600 text-xs">Resolving origin · Scoring petroload · Ranking alternatives</p>
+        </div>
       </div>
     </main>
   );

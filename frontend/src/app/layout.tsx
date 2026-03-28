@@ -9,6 +9,19 @@ const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfa
 export const metadata: Metadata = {
   title: { default: "BioLens — Material Intelligence", template: "%s | BioLens" },
   description: "Reveal the hidden petrochemical, origin, and lifecycle systems behind everyday products.",
+  openGraph: {
+    title: "BioLens — Material Intelligence",
+    description: "See what products are really made of. Analyze materials, health risks, tariff exposure, and lifecycle impact.",
+    images: [{ url: "/assets/biolens light.png", width: 1400, height: 930, alt: "BioLens Material Intelligence" }],
+    siteName: "BioLens",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "BioLens — Material Intelligence",
+    description: "See what products are really made of.",
+    images: ["/assets/biolens light.png"],
+  },
 };
 
 export const viewport: Viewport = { themeColor: "#070b12" };

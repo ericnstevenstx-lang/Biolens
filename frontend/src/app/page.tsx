@@ -32,6 +32,7 @@ export default function HomePage() {
       {/* HERO */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
         <div className="max-w-2xl w-full space-y-8">
+          <img src="/assets/biolens light.png" alt="BioLens Material Intelligence" width={180} height={120} className="mx-auto" style={{filter:"brightness(0.95) drop-shadow(0 0 30px rgba(6,182,212,0.15))"}}/>
           <div className="space-y-3">
             <h1 className="text-4xl sm:text-5xl font-black text-white leading-tight" style={{fontFamily:"var(--font-manrope)"}}>
               What is this product<br/>
