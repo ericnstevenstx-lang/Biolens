@@ -22,4 +22,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-Fri Mar 27 23:51:57 CDT 2026
+// BioLens Material Intelligence — 2026
