@@ -521,6 +521,49 @@ async function enrichMaterialsFromNeo4j(names: string[]): Promise<GraphMaterial[
   }
 }
 
+/**
+ * Fetch concern assessments directly for a list of material names.
+ * Used when the RPC health_concerns is empty (e.g. search-originated products).
+ */
+export async function fetchConcernAssessmentsForMaterials(
+  materialNames: string[]
+): Promise<any[]> {
+  if (!materialNames.length) return []
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data, error } = await supabase
+      .from('material_concern_assessments')
+      .select(`
+        concern_score,
+        concern_tier,
+        concern_status,
+        consumer_facing_note,
+        materials!inner ( material_name ),
+        toxicity_concern_categories!inner ( code, name, concern_domain )
+      `)
+      .in('materials.material_name', materialNames)
+      .in('concern_tier', ['high', 'very_high'])
+      .order('concern_score', { ascending: false })
+      .limit(20)
+
+    if (error || !data) return []
+
+    return data.map((row: any) => ({
+      material_name: row.materials?.material_name,
+      concern_code: row.toxicity_concern_categories?.code,
+      concern_name: row.toxicity_concern_categories?.name,
+      concern_domain: row.toxicity_concern_categories?.concern_domain,
+      concern_score: row.concern_score,
+      concern_tier: row.concern_tier,
+      concern_status: row.concern_status,
+      consumer_note: row.consumer_facing_note,
+    }))
+  } catch (err) {
+    console.error('Concern assessment fetch failed:', err)
+    return []
+  }
+}
+
 export async function enrichByMaterialNames(names: string[]): Promise<GraphMaterial[]> {
   if (!names.length) return []
 
@@ -696,13 +739,25 @@ export async function enrichByProductId(productId: string): Promise<EnrichedInte
     resolveCapitalFlow(productId, pi?.display_price),
   ])
 
-  return normalizeIntelligence(pi, graphMaterials, capitalFlow)
+  // If RPC didn't return health_concerns (no product_materials entries),
+  // fetch concern assessments directly for the matched materials
+  const rpcConcerns = Array.isArray(pi?.health_concerns) ? pi.health_concerns : []
+  let directConcerns: any[] = []
+
+  if (!rpcConcerns.length && graphMaterials.length) {
+    directConcerns = await fetchConcernAssessmentsForMaterials(
+      graphMaterials.map((g) => g.material)
+    )
+  }
+
+  return normalizeIntelligence(pi, graphMaterials, capitalFlow, directConcerns)
 }
 
 export function normalizeIntelligence(
   pi: Record<string, any> | null,
   graphMaterials: GraphMaterial[],
-  capitalFlow: NormalizedCapitalFlow | null = null
+  capitalFlow: NormalizedCapitalFlow | null = null,
+  directConcerns: any[] = []
 ): EnrichedIntelligence {
   const rpcPetroScore =
     safePetroScore(pi?.material_profile?.petroload_score) ??
@@ -767,12 +822,13 @@ export function normalizeIntelligence(
     ? Math.max(...graphMaterials.map((g) => g.toxicity ?? 0))
     : profileToxicity ?? (pi?.toxicity_score != null ? Number(pi.toxicity_score) : null)
 
-  // Parse health_concerns from RPC (concern assessments)
-  const healthConcerns: any[] = Array.isArray(pi?.health_concerns) ? pi.health_concerns : []
+  // Parse health_concerns from RPC (concern assessments) + merge direct concerns
+  const rpcHealthConcerns: any[] = Array.isArray(pi?.health_concerns) ? pi.health_concerns : []
+  const healthConcerns: any[] = rpcHealthConcerns.length ? rpcHealthConcerns : directConcerns
 
   // Derive boolean flags from concern codes
   const hasConcern = (code: string) =>
-    healthConcerns.some((c) => c.concern_code === code && c.concern_tier === 'high')
+    healthConcerns.some((c) => c.concern_code === code && (c.concern_tier === 'high' || c.concern_tier === 'very_high'))
 
   if (maxToxicity !== null || healthConcerns.length || pi?.health_effects) {
     const hazard =
@@ -811,11 +867,19 @@ export function normalizeIntelligence(
       .map((c) => c.concern_name as string)
       .slice(0, 5)
 
+    // When we have concern data, derive booleans. When no data, leave null.
+    const hasData = healthConcerns.length > 0
+    const edFlag = hasData ? hasConcern('endocrine_disruption') : (he?.endocrine_disruption ?? null)
+    const carcFlag = hasData ? hasConcern('carcinogenicity') : (he?.carcinogenicity ?? null)
+    const leachFlag = hasData
+      ? (hasConcern('plasticizer') || hasConcern('persistent_chemical') || hasConcern('microplastic_shedding'))
+      : (he?.leachate_risk ?? null)
+
     healthEffects = {
       hazardSignal: hazard,
-      endocrineDisruption: hasConcern('endocrine_disruption') || (he?.endocrine_disruption ?? null),
-      carcinogenicity: hasConcern('carcinogenicity') || (he?.carcinogenicity ?? null),
-      leachateRisk: hasConcern('plasticizer') || hasConcern('persistent_chemical') || (he?.leachate_risk ?? null),
+      endocrineDisruption: edFlag,
+      carcinogenicity: carcFlag,
+      leachateRisk: leachFlag,
       chemicalFlags: chemicalFlags.length ? chemicalFlags : (he?.chemical_flags ?? []),
       exposurePathways: exposurePathways.length ? exposurePathways : (he?.exposure_pathways ?? []),
       confidence: healthConcerns.length ? 'estimated' : graphMaterials.length ? 'inferred' : 'estimated',
