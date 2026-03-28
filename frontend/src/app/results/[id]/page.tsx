@@ -107,24 +107,61 @@ function Panel({ title, children, ready, skLines=3 }: { title: string; children:
 }
 
 function Row({ label, value, highlight }: { label: string; value?: string|null; highlight?: boolean }) {
+  if (!value) return null;
   return (
     <div className="flex items-start justify-between gap-4 py-2 border-b border-[#1a2d48] last:border-0">
       <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider shrink-0">{label}</span>
-      <span className={`text-sm text-right leading-snug ${value ? (highlight?"text-white font-medium":"text-slate-300") : "text-slate-600 italic"}`}>{value || "Not disclosed"}</span>
+      <span className={`text-sm text-right leading-snug ${highlight ? "text-white font-medium" : "text-slate-300"}`}>{value}</span>
     </div>
   );
 }
 
 function BoolBadge({ value, trueLabel="Yes", falseLabel="No" }: { value?: boolean|null; trueLabel?: string; falseLabel?: string }) {
-  if (value === null || value === undefined) return <span className="text-xs text-slate-500">Unknown</span>;
+  if (value === null || value === undefined) return null;
   return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${value?"text-red-400 bg-red-400/10":"text-emerald-400 bg-emerald-400/10"}`}>{value ? trueLabel : falseLabel}</span>;
+}
+
+// ─── Verdict generator ────────────────────────────────────────────────────────
+function buildVerdict(product: ProductData): string {
+  const score = product.petroloadIndex;
+  const h = product.healthEffects;
+  const cf = product.capitalFlow;
+
+  if (score > 70) {
+    let msg = `This product is ${score}% petrochemical-dependent.`;
+    if (h?.hazardSignal === "high") {
+      const flagNames = h.chemicalFlags?.slice(0, 2).join(" and ") || "health concerns";
+      msg += ` Materials flagged for ${flagNames}.`;
+    }
+    if (cf) {
+      msg += ` ${cf.tariffRatePct}% tariff exposure on imported materials.`;
+    }
+    return msg;
+  }
+
+  if (score >= 30) {
+    let msg = `At ${score}% petrochemical content, this product uses a mix of synthetic and transitional materials.`;
+    if (h?.hazardSignal === "moderate") {
+      msg += " Some chemical exposure pathways flagged for review.";
+    }
+    if (cf && cf.tariffRatePct > 0) {
+      msg += ` ${cf.tariffRatePct}% tariff rate applies to imported material inputs.`;
+    }
+    return msg;
+  }
+
+  let msg = `This product scores ${score}% on the petroload index, indicating predominantly bio-based or low-synthetic composition.`;
+  if (h?.hazardSignal === "low") {
+    msg += " No significant chemical hazard signals detected.";
+  }
+  return msg;
 }
 
 // ─── Main results content ─────────────────────────────────────────────────────
 function ResultsContent({ id }: { id: string }) {
   const searchParams = useSearchParams();
   const inputType = searchParams.get("type") || "search";
-  const value = searchParams.get("q") || decodeURIComponent(id);
+  const value = searchParams.get("value") || searchParams.get("q") || decodeURIComponent(id);
 
   const [product, setProduct] = useState<ProductData | null>(null);
   const [origin, setOrigin] = useState<OriginData | null>(null);
@@ -169,17 +206,18 @@ function ResultsContent({ id }: { id: string }) {
 
         setStage("ready");
         reveal("header", 0);
+        reveal("verdict", 100);
         reveal("gauge", 150);
         reveal("materials", 350);
         reveal("health", 600);
         reveal("origin", 800);
         reveal("lifecycle", 1000);
         reveal("alternatives", 1200);
-            reveal("impactDelta", 1300);
-            reveal("corporate", 1450);
-            reveal("capitalFlow", 1600);
-            reveal("evidence", 1800);
-            reveal("whereToBuy", 2000);
+        reveal("impactDelta", 1300);
+        reveal("corporate", 1450);
+        reveal("capitalFlow", 1600);
+        reveal("evidence", 1800);
+        reveal("whereToBuy", 2000);
       })
       .catch(err => {
         console.error("BioLens intake error:", err);
@@ -215,6 +253,11 @@ function ResultsContent({ id }: { id: string }) {
     </main>
   );
 
+  const hasHealthData = !!(product?.healthEffects);
+  const hasCapitalFlow = !!(product?.capitalFlow);
+  const hasLifecycle = !!(product?.lifecycle);
+  const hasOrigin = !!(origin);
+
   return (
     <main className="min-h-screen bg-[#070b12] text-slate-100">
       {/* NAV */}
@@ -223,116 +266,364 @@ function ResultsContent({ id }: { id: string }) {
         <span className="text-slate-600">/</span>
         <span className="text-slate-400 text-sm truncate">{product?.name || value}</span>
         <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-          {product && <span className="text-xs font-black px-3 py-1 rounded-full hidden sm:inline" style={{color:petroColor,background:petroColor+"15",border:`1px solid ${petroColor}30`}}>{score} {petroInfo.label}</span>}
           <Link href="/" className="text-xs text-slate-400 border border-[#1e3a5f] px-3 py-1.5 rounded-lg hover:text-white transition-colors">New Scan</Link>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-4">
-        {/* PRODUCT HEADER */}
+
+        {/* ── SECTION 1: HEADER ─────────────────────────────────────────── */}
         <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl p-5">
           {r("header") && product ? (
-            <div className="flex items-start gap-4 flex-wrap sm:flex-nowrap">
-              <div className="w-16 h-16 rounded-xl bg-[#0a1520] border border-[#1a2d48] flex items-center justify-center text-2xl flex-shrink-0">📦</div>
+            <div className="flex items-start justify-between gap-4 flex-wrap sm:flex-nowrap">
               <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="min-w-0">
-                    <p className="text-slate-500 text-xs uppercase tracking-widest mb-0.5 font-semibold truncate">{safeStr(product.brand) || safeStr(product.corporate?.brand) || "Unknown Brand"}</p>
-                    <h1 className="text-white font-bold text-xl sm:text-2xl leading-tight" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(product.name)}</h1>
-                    {product.category && <p className="text-slate-500 text-sm mt-0.5">{safeStr(product.category)}</p>}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <Confidence level={safeStr(product.confidence)}/>
-                      {flags.slice(0,3).map((f,i) => <RiskFlag key={i} flag={f}/>)}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-center px-4 py-2.5 rounded-2xl flex-shrink-0" style={{background:petroColor+"12",border:`1px solid ${petroColor}30`}}>
-                    <span className="font-black text-3xl leading-none" style={{color:petroColor,fontFamily:"var(--font-manrope)"}}>{score}</span>
-                    <span className="text-xs font-bold mt-0.5 capitalize" style={{color:petroColor}}>{petroInfo.label}</span>
-                  </div>
+                <p className="text-slate-500 text-xs uppercase tracking-widest mb-0.5 font-semibold truncate">{safeStr(product.brand) || safeStr(product.corporate?.brand)}</p>
+                <h1 className="text-white font-bold text-xl sm:text-2xl leading-tight" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(product.name)}</h1>
+                {product.category && <p className="text-slate-500 text-sm mt-0.5">{safeStr(product.category)}</p>}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Confidence level={safeStr(product.confidence)}/>
+                  {flags.slice(0,3).map((f,i) => <RiskFlag key={i} flag={f}/>)}
                 </div>
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-[#1a2d48]">
-                  <button className="px-4 py-2 bg-cyan-400 text-[#070b12] rounded-xl text-sm font-bold hover:bg-cyan-300 transition-colors" style={{fontFamily:"var(--font-manrope)"}}>Replace This Product</button>
-                  <button className="px-3 py-2 border border-[#1e3a5f] rounded-xl text-sm text-slate-300 hover:text-white hover:border-slate-500 transition-colors">Compare</button>
-                  <button className="px-3 py-2 border border-[#1e3a5f] rounded-xl text-sm text-slate-300 hover:text-white hover:border-slate-500 transition-colors">Share</button>
-                </div>
+              </div>
+              <div className="flex flex-col items-center px-5 py-3 rounded-2xl flex-shrink-0" style={{background:petroColor+"12",border:`1px solid ${petroColor}30`}}>
+                <span className="font-black text-4xl leading-none" style={{color:petroColor,fontFamily:"var(--font-manrope)"}}>{score}</span>
+                <span className="text-xs font-bold mt-1 capitalize" style={{color:petroColor}}>{petroInfo.label}</span>
               </div>
             </div>
           ) : (
             <div className="flex gap-4 animate-pulse">
-              <div className="w-16 h-16 rounded-xl bg-slate-800 flex-shrink-0"/>
               <div className="flex-1 space-y-2"><Skel h="h-4" w="w-1/4"/><Skel h="h-7" w="w-2/3"/><Skel h="h-4" w="w-1/5"/></div>
+              <div className="w-20 h-20 rounded-2xl bg-slate-800 flex-shrink-0"/>
             </div>
           )}
         </div>
 
-        {/* TWO-COLUMN GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* ── SECTION 2: VERDICT PARAGRAPH ──────────────────────────────── */}
+        {r("verdict") && product && (
+          <div
+            className="rounded-2xl p-5"
+            style={{
+              background: score > 70
+                ? "rgba(239,68,68,0.06)"
+                : score >= 30
+                  ? "rgba(245,158,11,0.06)"
+                  : "rgba(16,185,129,0.06)",
+              border: `1px solid ${petroColor}25`,
+            }}
+          >
+            <p className="text-base sm:text-lg leading-relaxed text-slate-200" style={{fontFamily:"var(--font-manrope)"}}>
+              {buildVerdict(product)}
+            </p>
+          </div>
+        )}
 
-          {/* LEFT COLUMN */}
-          <div className="space-y-4">
-
-            {/* PETROLOAD GAUGE */}
-            <Panel title="Petroload Index" ready={r("gauge")} skLines={1}>
-              <PetroGauge score={score}/>
-              {product?.materialInsight && (
-                <div className="mt-4 p-3 bg-cyan-400/5 border border-cyan-400/20 rounded-xl">
-                  <p className="text-xs font-bold text-cyan-400 mb-1">{safeStr(product.materialInsight.headline)}</p>
-                  <p className="text-xs text-slate-400 leading-relaxed">{safeStr(product.materialInsight.body)}</p>
-                </div>
-              )}
-            </Panel>
-
-            {/* MATERIAL INTELLIGENCE */}
-            <Panel title="Material Intelligence" ready={r("materials")} skLines={4}>
-              {product?.materials && product.materials.length > 0 ? (
-                <div className="space-y-3">
-                  {product.materials.some(m => m.percentage !== undefined) && (
-                    <div className="h-3 rounded-full overflow-hidden flex gap-px mb-4">
-                      {product.materials.filter(m => m.percentage !== undefined).map((m, i) => {
-                        const c = m.classification==="bio"?"#10b981":m.classification==="bridge"?"#f59e0b":m.classification==="synthetic"?"#f97316":"#475569";
-                        return <div key={i} className="h-full" style={{width:`${m.percentage}%`,background:c}} title={`${m.name}: ${m.percentage}%`}/>;
-                      })}
-                    </div>
-                  )}
-                  {product.materials.map((mat, i) => {
-                    const c = mat.classification==="bio"?"#10b981":mat.classification==="bridge"?"#f59e0b":mat.classification==="synthetic"?"#f97316":"#475569";
-                    return (
-                      <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)}</p>
-                            {mat.notes && <p className="text-xs text-slate-500 mt-0.5">{safeStr(mat.notes)}</p>}
+        {/* ── SECTION 3: TWO-COLUMN — Health Alert + Tariff Impact ─────── */}
+        {(hasHealthData || hasCapitalFlow) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* LEFT: Health Effects */}
+            {hasHealthData && (
+              <Panel title="Health Effects" ready={r("health")} skLines={6}>
+                {(() => {
+                  const h = product!.healthEffects!;
+                  const signal = safeStr(h.hazardSignal) || "unknown";
+                  const hColors: Record<string,string> = {low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
+                  const hc = hColors[signal.toLowerCase()] || "#475569";
+                  const isHigh = signal.toLowerCase() === "high";
+                  return (
+                    <div className="space-y-4">
+                      <div className="p-3 rounded-xl border" style={{borderColor:hc+"30",background:isHigh ? "rgba(239,68,68,0.1)" : hc+"08"}}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{background:hc+"15"}}>
+                            {signal==="high"?"⚠️":signal==="moderate"?"⚡":"✓"}
                           </div>
-                          <div className="flex gap-1.5 flex-shrink-0">
-                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize" style={{color:c,background:c+"15",border:`1px solid ${c}30`}}>{safeStr(mat.classification)}</span>
-                            <Confidence level={safeStr(mat.confidence)}/>
+                          <div className="flex-1">
+                            <p className="font-bold text-sm capitalize" style={{color:hc,fontFamily:"var(--font-manrope)"}}>{signal} Hazard Signal</p>
+                            {h.notes && <p className="text-xs text-slate-400 mt-0.5">{safeStr(h.notes)}</p>}
+                          </div>
+                          <div className="flex-shrink-0"><Confidence level={safeStr(h.confidence)}/></div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-0">
+                        {[
+                          {label:"Endocrine Disruption", value:h.endocrineDisruption, trueLabel:"Flagged", falseLabel:"Not detected"},
+                          {label:"Carcinogenicity", value:h.carcinogenicity, trueLabel:"Flagged", falseLabel:"Not detected"},
+                          {label:"Leachate / Chemical Risk", value:h.leachateRisk, trueLabel:"Risk present", falseLabel:"Not detected"},
+                        ].filter(item => item.value !== null && item.value !== undefined).map(({label,value,trueLabel,falseLabel}) => (
+                          <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
+                            <span className="text-sm text-slate-300">{label}</span>
+                            <BoolBadge value={value} trueLabel={trueLabel} falseLabel={falseLabel}/>
+                          </div>
+                        ))}
+                      </div>
+
+                      {h.exposurePathways && h.exposurePathways.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Exposure Pathways</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {h.exposurePathways.map((ep, i) => {
+                              const rc = ep.risk==="high"?"#ef4444":ep.risk==="moderate"?"#f59e0b":"#10b981";
+                              return (
+                                <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                                  <p className="text-xs font-semibold text-slate-300 capitalize">{safeStr(ep.type)}</p>
+                                  <p className="text-xs font-bold capitalize mt-0.5" style={{color:rc}}>{safeStr(ep.risk)} risk</p>
+                                  {ep.notes && <p className="text-xs text-slate-500 mt-0.5">{safeStr(ep.notes)}</p>}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                        {mat.percentage !== undefined && (
-                          <div>
-                            <div className="flex justify-between text-xs text-slate-500 mb-1"><span>Composition</span><span style={{color:c}}>{mat.percentage}%</span></div>
-                            <div className="h-1.5 bg-[#1a2d48] rounded-full overflow-hidden"><div className="h-full rounded-full" style={{width:`${mat.percentage}%`,background:c}}/></div>
+                      )}
+
+                      {h.chemicalFlags && h.chemicalFlags.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Chemical Flags</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {h.chemicalFlags.map((f, i) => <span key={i} className="text-xs px-2 py-0.5 rounded border text-red-400 bg-red-400/10 border-red-400/20">{safeStr(f)}</span>)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Panel>
+            )}
+
+            {/* RIGHT: Capital Flow + Tariff Impact */}
+            {hasCapitalFlow && (
+              <Panel title="Capital Flow + Tariff Impact" ready={r("capitalFlow")} skLines={5}>
+                {(() => {
+                  const cf = product!.capitalFlow!;
+                  return (
+                    <div className="space-y-4">
+                      {/* Capital flow bar */}
+                      <div>
+                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                          <span>Domestic {cf.domesticRetentionPct.toFixed(1)}%</span>
+                          <span>Foreign {cf.foreignLeakagePct.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
+                          <div className="h-full bg-emerald-500 transition-all duration-700" style={{width:`${cf.domesticRetentionPct}%`}}/>
+                          <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${cf.foreignLeakagePct}%`}}/>
+                        </div>
+                      </div>
+
+                      {/* Dollar breakdown if price available */}
+                      {cf.atPrice && (
+                        <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                          <p className="text-xs text-slate-400 mb-2">At ${cf.atPrice.price.toFixed(2)}</p>
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-lg font-bold text-red-400">${cf.atPrice.tariffDrain.toFixed(2)}</p>
+                              <p className="text-[10px] text-slate-500">Tariff Drain</p>
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-emerald-400">${cf.atPrice.domesticRetention.toFixed(2)}</p>
+                              <p className="text-[10px] text-slate-500">Domestic Retention</p>
+                            </div>
+                            <div>
+                              <p className="text-lg font-bold text-amber-400">${cf.atPrice.foreignLeakage.toFixed(2)}</p>
+                              <p className="text-[10px] text-slate-500">Foreign Leakage</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="space-y-0">
+                        <Row label="Tariff Rate" value={`${cf.tariffRatePct.toFixed(1)}%`} highlight/>
+                        <Row label="Origin Country" value={cf.originCountry}/>
+                        {cf.domesticAlternativeTariffPct !== null && (
+                          <Row label="Domestic Alt. Tariff" value={`${cf.domesticAlternativeTariffPct.toFixed(1)}%`}/>
+                        )}
+                      </div>
+
+                      {/* Risk flags */}
+                      {(cf.section301Applies || cf.feocDisqualified || cf.uflpaRisk || cf.babaEligible) && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {cf.section301Applies && <RiskFlag flag="Section 301"/>}
+                          {cf.feocDisqualified && <RiskFlag flag="FEOC Exposure Risk"/>}
+                          {cf.uflpaRisk && <RiskFlag flag="UFLPA Risk"/>}
+                          {cf.babaEligible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">BABA Eligible</span>}
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex justify-end"><Confidence level={safeStr(cf.confidence)}/></div>
+                    </div>
+                  );
+                })()}
+              </Panel>
+            )}
+          </div>
+        )}
+
+        {/* ── SECTION 4: PETROLOAD GAUGE + MATERIALS (horizontal) ───────── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Gauge */}
+          <Panel title="Petroload Index" ready={r("gauge")} skLines={1}>
+            <PetroGauge score={score}/>
+            {product?.materialInsight && (
+              <div className="mt-4 p-3 bg-cyan-400/5 border border-cyan-400/20 rounded-xl">
+                <p className="text-xs font-bold text-cyan-400 mb-1">{safeStr(product.materialInsight.headline)}</p>
+                <p className="text-xs text-slate-400 leading-relaxed">{safeStr(product.materialInsight.body)}</p>
+              </div>
+            )}
+          </Panel>
+
+          {/* Materials */}
+          {product?.materials && product.materials.length > 0 && (
+            <Panel title="Material Intelligence" ready={r("materials")} skLines={4}>
+              <div className="space-y-3">
+                {product.materials.some(m => m.percentage !== undefined) && (
+                  <div className="h-3 rounded-full overflow-hidden flex gap-px mb-4">
+                    {product.materials.filter(m => m.percentage !== undefined).map((m, i) => {
+                      const c = m.classification==="bio"?"#10b981":m.classification==="bridge"?"#f59e0b":m.classification==="synthetic"?"#f97316":"#475569";
+                      return <div key={i} className="h-full" style={{width:`${m.percentage}%`,background:c}} title={`${m.name}: ${m.percentage}%`}/>;
+                    })}
+                  </div>
+                )}
+                {product.materials.map((mat, i) => {
+                  const c = mat.classification==="bio"?"#10b981":mat.classification==="bridge"?"#f59e0b":mat.classification==="synthetic"?"#f97316":"#475569";
+                  return (
+                    <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(mat.name)}</p>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0" style={{color:c,background:c+"15",border:`1px solid ${c}30`}}>{safeStr(mat.classification)}</span>
+                      </div>
+                      {mat.healthScore !== undefined && (
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1.5">
+                          <span>Health score</span>
+                          <span className="font-semibold" style={{color:mat.healthScore>70?"#10b981":mat.healthScore>40?"#f59e0b":"#ef4444"}}>{mat.healthScore}/100</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          )}
+        </div>
+
+        {/* ── SECTION 5: TWO-COLUMN — Lifecycle + Origin Intelligence ──── */}
+        {(hasLifecycle || hasOrigin) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Lifecycle */}
+            {hasLifecycle && (
+              <Panel title="Lifecycle Intelligence" ready={r("lifecycle")} skLines={5}>
+                {(() => {
+                  const lc = product!.lifecycle!;
+                  const sc = lc.score ?? 0;
+                  const scolor = sc>=70?"#10b981":sc>=40?"#f59e0b":"#ef4444";
+                  const mpColors: Record<string,string> = {none:"#10b981",low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
+                  const mp = safeStr(lc.microplasticRisk).toLowerCase() || "unknown";
+                  return (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs text-slate-400">Lifecycle Score</span>
+                          <span className="font-black text-xl" style={{color:scolor,fontFamily:"var(--font-manrope)"}}>{sc}</span>
+                        </div>
+                        <div className="h-2 bg-[#1a2d48] rounded-full overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-700" style={{width:`${sc}%`,background:scolor}}/>
+                        </div>
+                      </div>
+                      <div className="space-y-0">
+                        {[{label:"Recyclable",value:lc.recyclable},{label:"Compostable",value:lc.compostable}]
+                          .filter(item => item.value !== null && item.value !== undefined)
+                          .map(({label,value}) => (
+                            <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
+                              <span className="text-sm text-slate-300">{label}</span>
+                              <BoolBadge value={value}/>
+                            </div>
+                          ))}
+                        {mp !== "unknown" && (
+                          <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
+                            <span className="text-sm text-slate-300">Microplastic Risk</span>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize" style={{color:mpColors[mp]||"#475569",background:(mpColors[mp]||"#475569")+"15"}}>{mp}</span>
                           </div>
                         )}
-                        {mat.healthScore !== undefined && (
-                          <div className="flex items-center gap-2 text-xs text-slate-500">
-                            <span>Health score</span>
-                            <span className="font-semibold" style={{color:mat.healthScore>70?"#10b981":mat.healthScore>40?"#f59e0b":"#ef4444"}}>{mat.healthScore}/100</span>
+                        {lc.landfillPersistenceYears !== undefined && (
+                          <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
+                            <span className="text-sm text-slate-300">Landfill Persistence</span>
+                            <span className="text-sm font-semibold text-amber-400">~{lc.landfillPersistenceYears.toLocaleString()} years</span>
+                          </div>
+                        )}
+                        {lc.endOfLifePathway && (
+                          <div className="flex items-start justify-between gap-4 py-2.5">
+                            <span className="text-sm text-slate-300 flex-shrink-0">End-of-Life</span>
+                            <span className="text-sm text-slate-300 text-right">{safeStr(lc.endOfLifePathway)}</span>
                           </div>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              ) : <p className="text-slate-500 text-sm">Material composition data expanding for this product class.</p>}
-            </Panel>
+                      <div className="pt-2 flex justify-end"><Confidence level={safeStr(lc.confidence)}/></div>
+                    </div>
+                  );
+                })()}
+              </Panel>
+            )}
 
-            {/* ALTERNATIVES */}
+            {/* Origin Intelligence */}
+            {hasOrigin && (
+              <Panel title="Origin Intelligence" ready={r("origin")} skLines={5}>
+                {(() => {
+                  const o = origin!;
+                  return (
+                    <div className="space-y-3">
+                      {o.flags && o.flags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pb-3 border-b border-[#1a2d48]">
+                          {o.flags.map((f, i) => <RiskFlag key={i} flag={f}/>)}
+                        </div>
+                      )}
+                      {o.disclosureLevel && (
+                        <div className="flex items-center justify-between pb-2 border-b border-[#1a2d48]">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Disclosure Level</span>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${
+                            safeStr(o.disclosureLevel)==="full"?"text-emerald-400 bg-emerald-400/10":
+                            safeStr(o.disclosureLevel)==="partial"?"text-amber-400 bg-amber-400/10":
+                            "text-red-400 bg-red-400/10"
+                          }`}>{safeStr(o.disclosureLevel)}</span>
+                        </div>
+                      )}
+                      <Row label="Made In" value={safeStr(o.madeIn) || null} highlight/>
+                      <Row label="Ships From" value={safeStr(o.shipsFrom) || null}/>
+                      <Row label="Sold By" value={safeStr(o.soldBy) || null}/>
+                      <Row label="Manufacturer" value={safeStr(o.manufacturer) || null}/>
+                      {o.importer && <Row label="Importer" value={safeStr(o.importer)}/>}
+                      <div className="pt-2 flex justify-between items-center">
+                        <span className="text-xs text-slate-600">Confidence</span>
+                        <Confidence level={safeStr(o.confidence)}/>
+                      </div>
+                      {o.flags?.some(f => safeStr(f).toLowerCase().includes("feoc")) && (
+                        <div className="p-3 rounded-xl bg-red-400/5 border border-red-400/20 text-xs text-slate-300 leading-relaxed">
+                          <span className="text-red-400 font-bold">FEOC Exposure: </span>
+                          This product may involve entities identified as Foreign Entities of Concern under U.S. supply chain security guidelines.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </Panel>
+            )}
+          </div>
+        )}
+
+        {/* ── SECTION 6: BETTER ALTERNATIVES / WHERE TO BUY ────────────── */}
+        {product?.alternatives && product.alternatives.length > 0 && (
+          <div className="space-y-4">
             <Panel title="Better Alternatives" ready={r("alternatives")} skLines={3}>
-              {product?.alternatives && product.alternatives.length > 0 ? (
-                <div className="space-y-3">
+              <div className="space-y-3">
+                {/* FiberFoundry CTA */}
+                <div className="p-4 rounded-xl bg-emerald-400/5 border border-emerald-400/20 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-bold text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>Shop bio-based alternatives on FiberFoundry</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Verified suppliers. Petroload-scored. Ready to ship.</p>
+                  </div>
+                  <a href="https://fiberfoundry.co" target="_blank" rel="noopener" className="px-4 py-2 bg-emerald-400 text-[#070b12] rounded-xl text-sm font-bold hover:bg-emerald-300 transition-colors flex-shrink-0 whitespace-nowrap" style={{fontFamily:"var(--font-manrope)"}}>Visit FiberFoundry</a>
+                </div>
+
+                {/* Alternative cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {product.alternatives.map((alt, i) => (
-                    <div key={i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl hover:border-emerald-400/30 transition-colors">
+                    <div key={alt.id || i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl hover:border-emerald-400/30 transition-colors">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div>
                           <p className="text-sm font-semibold text-white" style={{fontFamily:"var(--font-manrope)"}}>{safeStr(alt.name)}</p>
@@ -340,368 +631,124 @@ function ResultsContent({ id }: { id: string }) {
                         </div>
                         <Confidence level={safeStr(alt.confidence)}/>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div><p className="text-xs text-slate-500">Petroload ↓</p><p className="text-sm font-bold text-emerald-400">-{alt.petroloadImprovement}</p></div>
-                        {alt.microplasticReduction !== undefined && <div><p className="text-xs text-slate-500">Microplastic</p><p className="text-sm font-bold text-emerald-400">-{alt.microplasticReduction}%</p></div>}
-                        {alt.lifecycleImprovement !== undefined && <div><p className="text-xs text-slate-500">Lifecycle ↑</p><p className="text-sm font-bold text-emerald-400">+{alt.lifecycleImprovement}</p></div>}
-                      </div>
-                      <div className="mt-2 pt-2 border-t border-[#1a2d48]">
-                        <button className="text-xs font-semibold text-cyan-400 hover:text-cyan-300 transition-colors">Replace This Product →</button>
+                      <div className="flex flex-wrap gap-3 text-xs mt-2">
+                        {alt.petroloadImprovement > 0 && (
+                          <span className="text-emerald-400 font-semibold">-{alt.petroloadImprovement} pts petroload</span>
+                        )}
+                        {alt.microplasticReduction !== undefined && alt.microplasticReduction > 0 && (
+                          <span className="text-cyan-400 font-semibold">-{alt.microplasticReduction}% microplastic</span>
+                        )}
+                        {alt.lifecycleImprovement !== undefined && alt.lifecycleImprovement > 0 && (
+                          <span className="text-blue-400 font-semibold">+{alt.lifecycleImprovement} lifecycle</span>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-slate-500 text-sm">No vetted alternatives indexed for this product class yet.</p>}
-            </Panel>
-
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="space-y-4">
-
-            {/* HEALTH EFFECTS */}
-            <Panel title="Health Effects & Chemical Exposure" ready={r("health")} skLines={6}>
-              {product?.healthEffects ? (() => {
-                const h = product.healthEffects;
-                const signal = safeStr(h.hazardSignal) || "unknown";
-                const hColors: Record<string,string> = {low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
-                const hc = hColors[signal.toLowerCase()] || "#475569";
-                return (
-                  <div className="space-y-4">
-                    <div className="p-3 rounded-xl border" style={{borderColor:hc+"30",background:hc+"08"}}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{background:hc+"15"}}>
-                          {signal==="high"?"⚠️":signal==="moderate"?"⚡":"✓"}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-sm capitalize" style={{color:hc,fontFamily:"var(--font-manrope)"}}>{signal} Hazard Signal</p>
-                          {h.notes && <p className="text-xs text-slate-400 mt-0.5">{safeStr(h.notes)}</p>}
-                        </div>
-                        <div className="flex-shrink-0"><Confidence level={safeStr(h.confidence)}/></div>
-                      </div>
-                    </div>
-
-                    {h.chemicalFlags && h.chemicalFlags.length > 0 && (
-                      <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Chemical Flags</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {h.chemicalFlags.map((f, i) => <span key={i} className="text-xs px-2 py-0.5 rounded border text-red-400 bg-red-400/10 border-red-400/20">{safeStr(f)}</span>)}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-0">
-                      {[
-                        {label:"Endocrine Disruption", value:h.endocrineDisruption, trueLabel:"Flagged", falseLabel:"Not detected"},
-                        {label:"Carcinogenicity", value:h.carcinogenicity, trueLabel:"Flagged", falseLabel:"Not detected"},
-                        {label:"Leachate / Chemical Risk", value:h.leachateRisk, trueLabel:"Risk present", falseLabel:"Not detected"},
-                      ].map(({label,value,trueLabel,falseLabel}) => (
-                        <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
-                          <span className="text-sm text-slate-300">{label}</span>
-                          <BoolBadge value={value} trueLabel={trueLabel} falseLabel={falseLabel}/>
-                        </div>
-                      ))}
-                    </div>
-
-                    {h.exposurePathways && h.exposurePathways.length > 0 && (
-                      <div>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Exposure Pathways</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {h.exposurePathways.map((ep, i) => {
-                            const rc = ep.risk==="high"?"#ef4444":ep.risk==="moderate"?"#f59e0b":"#10b981";
-                            return (
-                              <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
-                                <p className="text-xs font-semibold text-slate-300 capitalize">{safeStr(ep.type)}</p>
-                                <p className="text-xs font-bold capitalize mt-0.5" style={{color:rc}}>{safeStr(ep.risk)} risk</p>
-                                {ep.notes && <p className="text-xs text-slate-500 mt-0.5">{safeStr(ep.notes)}</p>}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {h.evidenceAvailable === false && (
-                      <p className="text-xs text-slate-500 border border-[#1a2d48] rounded-lg p-3">Toxicity coverage for this material class is expanding. Data updates as peer-reviewed evidence is indexed.</p>
-                    )}
-                  </div>
-                );
-              })() : <p className="text-slate-500 text-sm">Health effects data is expanding for this product category.</p>}
-            </Panel>
-
-            {/* ORIGIN INTELLIGENCE */}
-            <Panel title="Origin Intelligence" ready={r("origin")} skLines={5}>
-              {origin ? (
-                <div className="space-y-3">
-                  {origin.flags && origin.flags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pb-3 border-b border-[#1a2d48]">
-                      {origin.flags.map((f, i) => <RiskFlag key={i} flag={f}/>)}
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between pb-2 border-b border-[#1a2d48]">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Disclosure Level</span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full capitalize ${
-                      safeStr(origin.disclosureLevel)==="full"?"text-emerald-400 bg-emerald-400/10":
-                      safeStr(origin.disclosureLevel)==="partial"?"text-amber-400 bg-amber-400/10":
-                      "text-red-400 bg-red-400/10"
-                    }`}>{safeStr(origin.disclosureLevel) || "unknown"}</span>
-                  </div>
-                  <Row label="Made In" value={safeStr(origin.madeIn) || null} highlight/>
-                  <Row label="Ships From" value={safeStr(origin.shipsFrom) || null}/>
-                  <Row label="Sold By" value={safeStr(origin.soldBy) || null}/>
-                  <Row label="Manufacturer" value={safeStr(origin.manufacturer) || null}/>
-                  {origin.importer && <Row label="Importer" value={safeStr(origin.importer)}/>}
-                  <div className="pt-2 flex justify-between items-center">
-                    <span className="text-xs text-slate-600">Confidence</span>
-                    <Confidence level={safeStr(origin.confidence)}/>
-                  </div>
-                  {origin.flags?.some(f => safeStr(f).toLowerCase().includes("feoc")) && (
-                    <div className="p-3 rounded-xl bg-red-400/5 border border-red-400/20 text-xs text-slate-300 leading-relaxed">
-                      <span className="text-red-400 font-bold">FEOC Exposure: </span>
-                      This product may involve entities identified as Foreign Entities of Concern under U.S. supply chain security guidelines.
-                    </div>
-                  )}
-                </div>
-              ) : <p className="text-slate-500 text-sm">Origin data not available for this product.</p>}
-            </Panel>
-
-            {/* LIFECYCLE */}
-            <Panel title="Lifecycle Intelligence" ready={r("lifecycle")} skLines={5}>
-              {product?.lifecycle ? (() => {
-                const lc = product.lifecycle;
-                const sc = lc.score ?? 0;
-                const scolor = sc>=70?"#10b981":sc>=40?"#f59e0b":"#ef4444";
-                const mpColors: Record<string,string> = {none:"#10b981",low:"#10b981",moderate:"#f59e0b",high:"#ef4444",unknown:"#475569"};
-                const mp = safeStr(lc.microplasticRisk).toLowerCase() || "unknown";
-                return (
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-xs text-slate-400">Lifecycle Score</span>
-                        <span className="font-black text-xl" style={{color:scolor,fontFamily:"var(--font-manrope)"}}>{sc}</span>
-                      </div>
-                      <div className="h-2 bg-[#1a2d48] rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-700" style={{width:`${sc}%`,background:scolor}}/>
-                      </div>
-                    </div>
-                    <div className="space-y-0">
-                      {[{label:"Recyclable",value:lc.recyclable},{label:"Compostable",value:lc.compostable}].map(({label,value}) => (
-                        <div key={label} className="flex items-center justify-between py-2.5 border-b border-[#1a2d48] last:border-0">
-                          <span className="text-sm text-slate-300">{label}</span>
-                          <BoolBadge value={value}/>
-                        </div>
-                      ))}
-                      <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
-                        <span className="text-sm text-slate-300">Microplastic Risk</span>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full capitalize" style={{color:mpColors[mp]||"#475569",background:(mpColors[mp]||"#475569")+"15"}}>{mp}</span>
-                      </div>
-                      {lc.landfillPersistenceYears !== undefined && (
-                        <div className="flex items-center justify-between py-2.5 border-b border-[#1a2d48]">
-                          <span className="text-sm text-slate-300">Landfill Persistence</span>
-                          <span className="text-sm font-semibold text-amber-400">~{lc.landfillPersistenceYears.toLocaleString()} years</span>
-                        </div>
-                      )}
-                      {lc.endOfLifePathway && (
-                        <div className="flex items-start justify-between gap-4 py-2.5">
-                          <span className="text-sm text-slate-300 flex-shrink-0">End-of-Life</span>
-                          <span className="text-sm text-slate-300 text-right">{safeStr(lc.endOfLifePathway)}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="pt-2 flex justify-end"><Confidence level={safeStr(lc.confidence)}/></div>
-                  </div>
-                );
-              })() : <p className="text-slate-500 text-sm">Lifecycle data expanding for this product category.</p>}
-            </Panel>
-
-            {/* CORPORATE */}
-            <Panel title="Corporate Attribution" ready={r("corporate")} skLines={4}>
-              {product?.corporate ? (
-                <div className="space-y-0">
-                  <Row label="Brand" value={safeStr(product.corporate.brand) || null} highlight/>
-                  <Row label="Brand Owner" value={safeStr(product.corporate.brandOwner) || null}/>
-                  <Row label="Manufacturer" value={safeStr(product.corporate.manufacturer) || null}/>
-                  <Row label="Distributor" value={safeStr(product.corporate.distributor) || null}/>
-                  <Row label="Parent Company" value={safeStr(product.corporate.parentCompany) || null}/>
-                  <div className="pt-3 flex justify-end"><Confidence level={safeStr(product.corporate.confidence)}/></div>
-                </div>
-              ) : <p className="text-slate-500 text-sm">Corporate attribution data not available.</p>}
-            </Panel>
-
-            {/* CAPITAL FLOW + TARIFF IMPACT */}
-            <Panel title="Capital Flow + Tariff Impact" ready={r("capitalFlow")} skLines={5}>
-              {product?.capitalFlow ? (
-                <div className="space-y-4">
-                  {/* Dollar breakdown if price available */}
-                  {product.capitalFlow.atPrice && (
-                    <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
-                      <p className="text-xs text-slate-400 mb-2">At ${product.capitalFlow.atPrice.price.toFixed(2)}</p>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-lg font-bold text-red-400">${product.capitalFlow.atPrice.tariffDrain.toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-500">Tariff Drain</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-emerald-400">${product.capitalFlow.atPrice.domesticRetention.toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-500">Domestic Retention</p>
-                        </div>
-                        <div>
-                          <p className="text-lg font-bold text-amber-400">${product.capitalFlow.atPrice.foreignLeakage.toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-500">Foreign Leakage</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Capital flow bar */}
-                  <div>
-                    <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                      <span>Domestic {product.capitalFlow.domesticRetentionPct.toFixed(1)}%</span>
-                      <span>Foreign {product.capitalFlow.foreignLeakagePct.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-3 rounded-full bg-[#1a2d48] overflow-hidden flex">
-                      <div className="h-full bg-emerald-500 transition-all duration-700" style={{width:`${product.capitalFlow.domesticRetentionPct}%`}}/>
-                      <div className="h-full bg-red-500 transition-all duration-700" style={{width:`${product.capitalFlow.foreignLeakagePct}%`}}/>
-                    </div>
-                  </div>
-
-                  <div className="space-y-0">
-                    <Row label="Tariff Rate" value={`${product.capitalFlow.tariffRatePct.toFixed(1)}%`} highlight/>
-                    <Row label="Origin Country" value={product.capitalFlow.originCountry}/>
-                    {product.capitalFlow.domesticAlternativeTariffPct !== null && (
-                      <Row label="Domestic Alt. Tariff" value={`${product.capitalFlow.domesticAlternativeTariffPct.toFixed(1)}%`}/>
-                    )}
-                  </div>
-
-                  {/* Risk flags */}
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {product.capitalFlow.section301Applies && <RiskFlag flag="Section 301"/>}
-                    {product.capitalFlow.feocDisqualified && <RiskFlag flag="FEOC Exposure Risk"/>}
-                    {product.capitalFlow.uflpaRisk && <RiskFlag flag="UFLPA Risk"/>}
-                    {product.capitalFlow.babaEligible && <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">BABA Eligible</span>}
-                  </div>
-
-                  <div className="pt-2 flex justify-end"><Confidence level={safeStr(product.capitalFlow.confidence)}/></div>
-                </div>
-              ) : <p className="text-slate-500 text-sm">Capital flow data not yet available for this product.</p>}
-            </Panel>
-
-            {/* EVIDENCE */}
-            <Panel title="Evidence Layer" ready={r("evidence")} skLines={2}>
-              {product?.evidence ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400">
-                    {product.evidence.sources?.length || 0} source{product.evidence.sources?.length !== 1 ? "s" : ""} indexed
-                    {product.evidence.lastUpdated ? ` · Updated ${product.evidence.lastUpdated}` : ""}
-                  </p>
-                  {product.evidence.sources && product.evidence.sources.length > 0 && (
-                    <div className="space-y-2">
-                      {product.evidence.sources.map((s, i) => (
-                        <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-xs text-slate-300">{safeStr(s.title)}</p>
-                            <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${s.type==="regulatory"?"text-emerald-400 bg-emerald-400/10":s.type==="academic"?"text-blue-400 bg-blue-400/10":"text-slate-400 bg-slate-400/10"}`}>{safeStr(s.type)}</span>
-                          </div>
-                          {s.year && <p className="text-xs text-slate-600 mt-1">{s.year}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {product.evidence.methodology && (
-                    <details className="text-xs">
-                      <summary className="text-slate-500 cursor-pointer hover:text-slate-300 transition-colors">Methodology</summary>
-                      <p className="text-slate-400 mt-2 leading-relaxed">{product.evidence.methodology}</p>
-                    </details>
-                  )}
-                </div>
-              ) : <p className="text-slate-500 text-sm">Evidence sources loading.</p>}
-            </Panel>
-
-            {/* WHERE TO BUY — FiberFoundry */}
-            <Panel title="Where to Buy — Better Alternatives" ready={r("whereToBuy")} skLines={3}>
-              {product?.alternatives && product.alternatives.length > 0 ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-400">Bio-based alternatives available through FiberFoundry and verified suppliers.</p>
-                  <div className="space-y-2">
-                    {product.alternatives.slice(0, 3).map((alt, i) => (
-                      <div key={alt.id || i} className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-lg flex items-center justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-200 truncate">{alt.name}</p>
-                          <div className="flex gap-3 mt-1">
-                            {alt.petroloadImprovement > 0 && (
-                              <span className="text-[10px] text-emerald-400">-{alt.petroloadImprovement} pts petroload</span>
-                            )}
-                            {alt.microplasticReduction && alt.microplasticReduction > 0 && (
-                              <span className="text-[10px] text-cyan-400">-{alt.microplasticReduction}% microplastic</span>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20 whitespace-nowrap flex-shrink-0">Coming Soon</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-slate-600 text-center pt-1">FiberFoundry verified suppliers prioritized. Marketplace listings excluded.</p>
-                </div>
-              ) : <p className="text-slate-500 text-sm">Alternative product sourcing expanding for this category.</p>}
-            </Panel>
-
-          </div>
-        </div>
-
-      {/* IMPACT DELTA */}
-      <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#1a2d48] bg-[#0a1520] flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-widest text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Impact Delta</p>
-          <span className="text-xs text-slate-600">Modeled benefit of switching away from this product</span>
-        </div>
-        <div className="p-5">
-          {r("corporate") && product?.impactDelta?.available ? (() => {
-            const d = product.impactDelta!;
-            return (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {d.petroloadReduction !== undefined && (
-                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
-                    <p className="text-xs text-slate-500 mb-1">Petroload Reduction</p>
-                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.petroloadReduction} pts</p>
-                  </div>
-                )}
-                {d.microplasticReduction !== undefined && (
-                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
-                    <p className="text-xs text-slate-500 mb-1">Microplastic Reduction</p>
-                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.microplasticReduction}%</p>
-                  </div>
-                )}
-                {d.lifecycleImprovement !== undefined && (
-                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
-                    <p className="text-xs text-slate-500 mb-1">Lifecycle Improvement</p>
-                    <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>+{d.lifecycleImprovement} pts</p>
-                  </div>
-                )}
-                {d.estimatedJobsSupported !== undefined && (
-                  <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
-                    <p className="text-xs text-slate-500 mb-1">Est. Domestic Jobs</p>
-                    <p className="text-xl font-black text-cyan-400" style={{fontFamily:"var(--font-manrope)"}}>{d.estimatedJobsSupported.toLocaleString()}</p>
-                  </div>
-                )}
-                {d.confidence && (
-                  <div className="col-span-2 sm:col-span-4 flex justify-end pt-1">
-                    <Confidence level={safeStr(d.confidence)}/>
-                  </div>
-                )}
               </div>
-            );
-          })() : r("corporate") ? (
-            <p className="text-slate-500 text-sm">Switching model not yet calculated for this product class.</p>
-          ) : (
-            <div className="space-y-2.5 animate-pulse">
-              <div className="h-4 w-full rounded bg-slate-800"/>
-              <div className="h-4 w-4/5 rounded bg-slate-800"/>
-            </div>
-          )}
-        </div>
-      </div>
+            </Panel>
 
-      <div className="h-6"/>
+            {/* Impact Delta — switching benefit */}
+            {product.impactDelta?.available && (
+              <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#1a2d48] bg-[#0a1520] flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-widest text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Impact Delta</p>
+                  <span className="text-xs text-slate-600">Modeled benefit of switching away from this product</span>
+                </div>
+                <div className="p-5">
+                  {r("impactDelta") ? (() => {
+                    const d = product.impactDelta!;
+                    return (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {d.petroloadReduction !== undefined && (
+                          <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                            <p className="text-xs text-slate-500 mb-1">Petroload Reduction</p>
+                            <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.petroloadReduction} pts</p>
+                          </div>
+                        )}
+                        {d.microplasticReduction !== undefined && (
+                          <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                            <p className="text-xs text-slate-500 mb-1">Microplastic Reduction</p>
+                            <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>-{d.microplasticReduction}%</p>
+                          </div>
+                        )}
+                        {d.lifecycleImprovement !== undefined && (
+                          <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                            <p className="text-xs text-slate-500 mb-1">Lifecycle Improvement</p>
+                            <p className="text-xl font-black text-emerald-400" style={{fontFamily:"var(--font-manrope)"}}>+{d.lifecycleImprovement} pts</p>
+                          </div>
+                        )}
+                        {d.estimatedJobsSupported !== undefined && (
+                          <div className="p-3 bg-[#0a1520] border border-[#1a2d48] rounded-xl text-center">
+                            <p className="text-xs text-slate-500 mb-1">Est. Domestic Jobs</p>
+                            <p className="text-xl font-black text-cyan-400" style={{fontFamily:"var(--font-manrope)"}}>{d.estimatedJobsSupported.toLocaleString()}</p>
+                          </div>
+                        )}
+                        {d.confidence && (
+                          <div className="col-span-2 sm:col-span-4 flex justify-end pt-1">
+                            <Confidence level={safeStr(d.confidence)}/>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div className="space-y-2.5 animate-pulse">
+                      <div className="h-4 w-full rounded bg-slate-800"/>
+                      <div className="h-4 w-4/5 rounded bg-slate-800"/>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SECTION 7: EVIDENCE (collapsed by default) ───────────────── */}
+        {product?.evidence && (
+          <details className="bg-[#0c1829] border border-[#1e3a5f] rounded-2xl overflow-hidden group">
+            <summary className="px-5 py-3 bg-[#0a1520] cursor-pointer hover:bg-[#0c1a2a] transition-colors flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400" style={{fontFamily:"var(--font-manrope)"}}>Evidence Layer</p>
+              <span className="text-xs text-slate-600">
+                {product.evidence.sources?.length || 0} source{product.evidence.sources?.length !== 1 ? "s" : ""}
+                {product.evidence.lastUpdated ? ` · Updated ${product.evidence.lastUpdated}` : ""}
+              </span>
+            </summary>
+            <div className="p-5 space-y-3">
+              {product.evidence.sources && product.evidence.sources.length > 0 && (
+                <div className="space-y-2">
+                  {product.evidence.sources.map((s, i) => (
+                    <div key={i} className="p-2.5 bg-[#0a1520] border border-[#1a2d48] rounded-lg">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs text-slate-300">{safeStr(s.title)}</p>
+                        <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${s.type==="regulatory"?"text-emerald-400 bg-emerald-400/10":s.type==="academic"?"text-blue-400 bg-blue-400/10":"text-slate-400 bg-slate-400/10"}`}>{safeStr(s.type)}</span>
+                      </div>
+                      {s.year && <p className="text-xs text-slate-600 mt-1">{s.year}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {product.evidence.methodology && (
+                <details className="text-xs">
+                  <summary className="text-slate-500 cursor-pointer hover:text-slate-300 transition-colors">Methodology</summary>
+                  <p className="text-slate-400 mt-2 leading-relaxed">{product.evidence.methodology}</p>
+                </details>
+              )}
+            </div>
+          </details>
+        )}
+
+        {/* ── SECTION 8: ECOSYSTEM FOOTER ──────────────────────────────── */}
+        <div className="border-t border-[#1a2d48] mt-8 pt-6 pb-8 text-center space-y-2">
+          <p className="text-xs text-slate-500">Powered by <span className="text-cyan-400 font-semibold">BioLens</span> Material Intelligence</p>
+          <div className="flex justify-center gap-6 text-xs text-slate-600">
+            <a href="https://nowweevolve.com" target="_blank" rel="noopener" className="hover:text-slate-400 transition-colors">Now We Evolve</a>
+            <span className="text-slate-700">·</span>
+            <a href="https://bioeconomyfoundation.org" target="_blank" rel="noopener" className="hover:text-slate-400 transition-colors">BioeconomyFoundation.org</a>
+            <span className="text-slate-700">·</span>
+            <a href="https://fiberfoundry.co" target="_blank" rel="noopener" className="hover:text-slate-400 transition-colors">FiberFoundry</a>
+          </div>
+        </div>
+
       </div>
     </main>
   );
@@ -721,4 +768,4 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
       <ResultsContent id={id}/>
     </Suspense>
   );
-              }
+}
