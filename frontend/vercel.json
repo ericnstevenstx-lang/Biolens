@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/product-ingester",
-      "schedule": "0 9,13,17,21 * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }
