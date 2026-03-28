@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { createClient } from "@supabase/supabase-js";
 import Nav from "@/components/Nav";
 import Footer from "@/components/Footer";
 
@@ -12,35 +13,28 @@ type MaterialCard = {
 
 async function getMaterials(): Promise<MaterialCard[]> {
   try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      "http://localhost:3000";
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || "";
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.REACT_APP_SUPABASE_ANON_KEY || "";
 
-    const res = await fetch(`${baseUrl}/api/materials/browse`, {
-      cache: "no-store",
-    });
+    if (!supabaseUrl || !supabaseKey) return [];
 
-    if (!res.ok) return [];
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await supabase
+      .from("materials")
+      .select("id, material_name, material_family, petroload_score, consumer_facing_summary, risk_level")
+      .eq("review_status", "published")
+      .not("consumer_facing_summary", "is", null)
+      .order("material_name", { ascending: true })
+      .limit(200);
 
-    const data = await res.json();
-    const items = Array.isArray(data?.materials) ? data.materials : [];
+    if (error || !data) return [];
 
-    return items.map((item: any) => ({
-      slug: String(item.slug ?? item.normalized_name ?? item.name ?? "").trim(),
-      name: String(item.name ?? "Unknown Material"),
-      category: String(item.material_family ?? item.category ?? "Material"),
-      summary: String(
-        item.consumer_summary ??
-          item.summary ??
-          "Material intelligence profile coming online."
-      ),
-      petroload:
-        typeof item.petroload_index === "number"
-          ? item.petroload_index
-          : typeof item.petroload === "number"
-            ? item.petroload
-            : null,
+    return data.map((item: any) => ({
+      slug: String(item.material_name ?? "").trim(),
+      name: String(item.material_name ?? "Unknown Material"),
+      category: String(item.material_family ?? "Material"),
+      summary: String(item.consumer_facing_summary ?? "Material intelligence profile coming online."),
+      petroload: item.petroload_score != null ? Math.round(Number(item.petroload_score) * 100) : null,
     }));
   } catch {
     return [];
