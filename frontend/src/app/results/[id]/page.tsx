@@ -15,7 +15,7 @@ interface ImpactDelta { petroloadReduction?: number; microplasticReduction?: num
 interface OriginData { madeIn?: string; shipsFrom?: string; soldBy?: string; manufacturer?: string; importer?: string; disclosureLevel?: string; confidence?: string; flags?: string[]; }
 interface CapitalFlowData { tariffDrainPct: number; domesticRetentionPct: number; foreignLeakagePct: number; section301Applies: boolean; feocDisqualified: boolean; uflpaRisk: boolean; babaEligible: boolean; tariffRatePct: number; originCountry: string|null; domesticAlternativeTariffPct: number|null; atPrice?: { price: number; tariffDrain: number; domesticRetention: number; foreignLeakage: number }; confidence: string; }
 interface PoliticalActivity { companyName: string; totalContributions: number; republicanPct: number; democratPct: number; otherPct: number; cycle: number; pacName: string; topRecipients: { name: string; party: string; amount: number }[]; confidence: string; }
-interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; capitalFlow?: CapitalFlowData; politicalActivity?: PoliticalActivity; }
+interface ProductData { id: string; name: string; brand?: string; imageUrl?: string; barcode?: string; category?: string; petroloadIndex: number; petroloadLabel?: string; materials?: Material[]; healthEffects?: HealthEffects; lifecycle?: LifecycleData; alternatives?: Alternative[]; corporate?: CorporateData; evidence?: { sources?: { title: string; type: string; year?: number; url?: string }[]; methodology?: string; lastUpdated?: string }; materialInsight?: { headline: string; body: string }; confidence?: string; impactDelta?: ImpactDelta; capitalFlow?: CapitalFlowData; politicalActivity?: PoliticalActivity; certifications?: string[]; }
 
 // Safe string coercion - handles objects, null, undefined
 function safeStr(v: unknown): string {
@@ -280,6 +280,9 @@ function ResultsContent({ id }: { id: string }) {
                 <div className="flex flex-wrap gap-2 mt-2">
                   <Confidence level={safeStr(product.confidence)}/>
                   {flags.slice(0,3).map((f,i) => <RiskFlag key={i} flag={f}/>)}
+                  {product.certifications && product.certifications.length > 0 && product.certifications.map((cert, i) => (
+                    <span key={`cert-${i}`} className="text-xs font-medium px-2 py-0.5 rounded border text-cyan-400 bg-cyan-400/10 border-cyan-400/20">{cert}</span>
+                  ))}
                 </div>
               </div>
               <div className="flex flex-col items-center px-5 py-3 rounded-2xl flex-shrink-0" style={{background:petroColor+"12",border:`1px solid ${petroColor}30`}}>

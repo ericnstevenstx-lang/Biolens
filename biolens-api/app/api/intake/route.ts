@@ -122,13 +122,16 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     /Sold by[^:]*:\s*<[^>]+>\s*<a[^>]*>([^<]+)</i
   );
 
-  // Extract material/fabric from product details table
+  // Extract material/fabric from product details table (Amazon uses th/td format)
   const material = extractFromHtml(
     html,
-    /(?:Material|Fabric Type|Material Type|Fabric)[^:]*<\/span>\s*<span[^>]*>\s*([^<]{2,80})/i
+    /Fabric Type\s*<\/th>\s*<td[^>]*>\s*([^<]{2,120})/i
   ) || extractFromHtml(
     html,
-    /(?:Material|Fabric Type)[^:]*:\s*<[^>]+>\s*([^<\n]{2,80})/i
+    /Material Type\s*<\/th>\s*<td[^>]*>\s*([^<]{2,120})/i
+  ) || extractFromHtml(
+    html,
+    /(?:Material|Fabric Type|Material Type)[^:]*<\/span>\s*<span[^>]*>\s*([^<]{2,80})/i
   ) || extractFromHtml(
     html,
     /"material"\s*:\s*"([^"]+)"/i
@@ -164,6 +167,40 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     if (text.length > 5 && text.length < 300) bullets.push(text);
   }
 
+  // Extract manufacturer from product details table
+  const manufacturer = extractFromHtml(
+    html,
+    /Manufacturer\s*<\/th>\s*<td[^>]*>\s*([^<]{2,80})/i
+  );
+
+  // Extract country from product details table
+  const countryFromTable = extractFromHtml(
+    html,
+    /Country of Origin\s*<\/th>\s*<td[^>]*>\s*([^<]{2,60})/i
+  );
+
+  // Extract certifications (OEKO-TEX, GOTS, Fair Trade, etc.)
+  const certifications: string[] = [];
+  const certPatterns = [
+    { pattern: /OEKO-TEX/i, label: "OEKO-TEX" },
+    { pattern: /STANDARD 100/i, label: "STANDARD 100" },
+    { pattern: /GOTS/i, label: "GOTS Certified" },
+    { pattern: /Fair Trade/i, label: "Fair Trade" },
+    { pattern: /USDA Organic/i, label: "USDA Organic" },
+    { pattern: /Global Recycled Standard/i, label: "GRS Certified" },
+    { pattern: /FSC/i, label: "FSC Certified" },
+    { pattern: /B Corp/i, label: "B Corp" },
+    { pattern: /Cradle to Cradle/i, label: "Cradle to Cradle" },
+    { pattern: /GREENGUARD/i, label: "GREENGUARD" },
+    { pattern: /CertiPUR/i, label: "CertiPUR-US" },
+    { pattern: /bluesign/i, label: "bluesign" },
+  ];
+  for (const { pattern, label } of certPatterns) {
+    if (pattern.test(html) && !certifications.includes(label)) {
+      certifications.push(label);
+    }
+  }
+
   // Infer material from title/bullets if not found in product details
   const inferredMaterial = material || inferMaterialFromText(
     [title, description, ...(bullets || [])].filter(Boolean).join(" ")
@@ -176,10 +213,10 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     category: category || undefined,
     description: description || undefined,
     imageUrl,
-    countryOfOrigin,
+    countryOfOrigin: countryOfOrigin || countryFromTable || undefined,
     shipsFrom,
     soldBy,
-    manufacturer: brand || undefined,
+    manufacturer: manufacturer || brand || undefined,
     bullets: bullets.length ? bullets : undefined,
     rawPayload: {
       asin,
@@ -187,6 +224,7 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
       scraped: true,
       extractedMaterial: inferredMaterial || undefined,
       price: priceStr ? Number(priceStr) : undefined,
+      certifications: certifications.length ? certifications : undefined,
     },
   };
 }
@@ -676,6 +714,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       politicalActivity: intelligence.politicalActivity,
       materialInsight: intelligence.materialInsight,
       confidence: intelligence.confidence,
+      certifications: (extracted.rawPayload as any)?.certifications || [],
     };
 
     return NextResponse.json({
