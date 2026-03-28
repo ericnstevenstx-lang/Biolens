@@ -30,6 +30,7 @@ interface ExtractedProduct {
   imageUrl?: string;
   asin?: string;
   rawPayload?: Record<string, unknown>;
+  price?: number;
 }
 
 interface OriginSignal {
@@ -103,11 +104,11 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
   const brand = extractFromHtml(
     html,
     /id="bylineInfo"[^>]*>[\s\S]*?<a[^>]*>([^<]+)</i
-  );
+  ) || extractFromHtml(html, /"brand"\s*:\s*"([^"]+)"/i);
   const imageUrl = extractFromHtml(
     html,
     /id="landingImage"[^>]+src="([^"]+)"/i
-  );
+  ) || extractFromHtml(html, /"large"\s*:\s*"([^"]+)"/i);
   const countryOfOrigin = extractFromHtml(
     html,
     /Country of Origin[^:]*:\s*<[^>]+>\s*([^<\n]{2,60})/i
@@ -121,6 +122,39 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     /Sold by[^:]*:\s*<[^>]+>\s*<a[^>]*>([^<]+)</i
   );
 
+  // Extract material/fabric from product details table
+  const material = extractFromHtml(
+    html,
+    /(?:Material|Fabric Type|Material Type|Fabric)[^:]*<\/span>\s*<span[^>]*>\s*([^<]{2,80})/i
+  ) || extractFromHtml(
+    html,
+    /(?:Material|Fabric Type)[^:]*:\s*<[^>]+>\s*([^<\n]{2,80})/i
+  ) || extractFromHtml(
+    html,
+    /"material"\s*:\s*"([^"]+)"/i
+  );
+
+  // Extract category from breadcrumbs or JSON-LD
+  const category = extractFromHtml(
+    html,
+    /class="a-link-normal a-color-tertiary"[^>]*>\s*([^<]{2,50})\s*</i
+  ) || extractFromHtml(
+    html,
+    /"category"\s*:\s*"([^"]+)"/i
+  );
+
+  // Extract price
+  const priceStr = extractFromHtml(
+    html,
+    /class="a-price-whole"[^>]*>(\d+)/i
+  );
+
+  // Extract description
+  const description = extractFromHtml(
+    html,
+    /id="productDescription"[^>]*>[\s\S]*?<p[^>]*>\s*([\s\S]*?)\s*<\/p>/i
+  )?.replace(/<[^>]+>/g, "").trim();
+
   const bullets: string[] = [];
   const bulletPattern = /<span class="a-list-item">\s*([\s\S]*?)\s*</gi;
   let match: RegExpExecArray | null;
@@ -130,23 +164,84 @@ function parseAmazonHtml(html: string, asin: string, rawUrl: string): ExtractedP
     if (text.length > 5 && text.length < 300) bullets.push(text);
   }
 
+  // Infer material from title/bullets if not found in product details
+  const inferredMaterial = material || inferMaterialFromText(
+    [title, description, ...(bullets || [])].filter(Boolean).join(" ")
+  );
+
   return {
     asin,
     title,
     brand,
+    category: category || undefined,
+    description: description || undefined,
     imageUrl,
     countryOfOrigin,
     shipsFrom,
     soldBy,
+    manufacturer: brand || undefined,
     bullets: bullets.length ? bullets : undefined,
-    rawPayload: { asin, url: rawUrl, scraped: true },
+    rawPayload: {
+      asin,
+      url: rawUrl,
+      scraped: true,
+      extractedMaterial: inferredMaterial || undefined,
+      price: priceStr ? Number(priceStr) : undefined,
+    },
   };
+}
+
+// Infer primary material from text content (title, description, bullets)
+function inferMaterialFromText(text: string): string | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+  const materials: [string, string][] = [
+    ["100% polyester", "Polyester"],
+    ["100% cotton", "Cotton"],
+    ["100% nylon", "Nylon"],
+    ["polyester", "Polyester"],
+    ["cotton", "Cotton"],
+    ["microfiber", "Microfiber"],
+    ["bamboo", "Bamboo"],
+    ["linen", "Linen"],
+    ["silk", "Silk"],
+    ["wool", "Wool"],
+    ["acrylic", "Acrylic"],
+    ["nylon", "Nylon"],
+    ["spandex", "Spandex"],
+    ["rayon", "Rayon"],
+    ["viscose", "Viscose"],
+    ["polyethylene", "Polyethylene"],
+    ["polypropylene", "Polypropylene"],
+    ["hdpe", "HDPE"],
+    ["pvc", "PVC"],
+    ["abs", "ABS Plastic"],
+    ["silicone", "Silicone"],
+    ["stainless steel", "Stainless Steel"],
+    ["aluminum", "Aluminum"],
+    ["glass", "Glass"],
+    ["ceramic", "Ceramic"],
+    ["rubber", "Rubber"],
+    ["latex", "Latex"],
+    ["leather", "Leather"],
+    ["hemp", "Hemp"],
+    ["jute", "Jute"],
+  ];
+  // Prefer "100% X" matches first
+  for (const [pattern, name] of materials) {
+    if (lower.includes(pattern)) return name;
+  }
+  return null;
 }
 
 async function fetchAmazonProduct(asin: string, rawUrl: string): Promise<ExtractedProduct> {
   try {
     const response = await fetch(`https://www.amazon.com/dp/${asin}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; BioLens/1.0)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
       signal: AbortSignal.timeout(8000),
     });
 
@@ -166,7 +261,11 @@ async function fetchAmazonProduct(asin: string, rawUrl: string): Promise<Extract
 async function fetchGenericUrl(url: string): Promise<ExtractedProduct> {
   try {
     const response = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; BioLens/1.0)" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
       signal: AbortSignal.timeout(8000),
     });
 
@@ -496,10 +595,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     let intelligence = await enrichByProductId(productId);
 
-    if (intelligence.materials.length === 0 && inputType === "search") {
-      const fallbackGraphMaterials = await enrichByMaterialNames([value]);
+    if (intelligence.materials.length === 0) {
+      // Build search terms from extracted material, title, or raw query
+      const searchTerms: string[] = [];
+      const extractedMaterial = (extracted.rawPayload as any)?.extractedMaterial;
+      if (extractedMaterial) searchTerms.push(extractedMaterial);
+      if (extracted.title && extracted.title !== value) searchTerms.push(extracted.title);
+      searchTerms.push(value);
+
+      // Try each search term until we find materials
+      let fallbackGraphMaterials: any[] = [];
+      for (const term of searchTerms) {
+        fallbackGraphMaterials = await enrichByMaterialNames([term]);
+        if (fallbackGraphMaterials.length > 0) break;
+      }
+
       if (fallbackGraphMaterials.length) {
-        const materialNames = fallbackGraphMaterials.map((g) => g.material);
+        const materialNames = fallbackGraphMaterials.map((g: any) => g.material);
         const [concerns, capitalFlow] = await Promise.all([
           fetchConcernAssessmentsForMaterials(materialNames),
           resolveCapitalFlow(productId, null, materialNames),
