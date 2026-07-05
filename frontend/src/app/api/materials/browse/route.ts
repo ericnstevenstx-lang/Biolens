@@ -1,25 +1,27 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.REACT_APP_SUPABASE_URL ||
-    "";
-const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.REACT_APP_SUPABASE_ANON_KEY ||
-    "";
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+export const dynamic = "force-dynamic";
 
 export async function GET() {
+    const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        process.env.REACT_APP_SUPABASE_URL ||
+        "";
+    const supabaseKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        process.env.REACT_APP_SUPABASE_ANON_KEY ||
+        "";
+
     if (!supabaseUrl || !supabaseKey) {
           return NextResponse.json(
             { success: false, error: "Supabase env vars not configured" },
             { status: 500 }
                 );
     }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
         const { data, error } = await supabase
