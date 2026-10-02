@@ -1,39 +1,37 @@
-"""Generate plasma-cutter G-code (.gm) for the laminated panel outline.
+"""Generate Torchmate plasma G-code (.gm) for the laminated panel outline.
 
 Cuts the full side-elevation silhouette (body, top profile, both tenons) as one
-outside contour from 16 ga sheet.
+outside contour. Output matches the shop's working Torchmate files
+(PLT-47x47_RevE.gm):
+- G70 (inch), G90, M06 T1 header; M02 end. No comments, no Z, no spindle.
+- M64 = torch on, M65 = torch off.
+- Explicit G00/G01 on every move, 3 decimals, F on the first cut move.
+- Torch path offset 0.030 toward the part side of every edge (shop convention).
+- Outside contour cut clockwise; pierce in scrap below the bottom edge,
+  straight lead-in, 0.125 overcut past the start.
 
-Plasma conventions used:
-- XY only. No Z words, no spindle speed: torch height and pierce delay are
-  left to the table's THC/controller settings.
-- M07 = cut (torch) on, M08 = cut off, per Hypertherm/Phoenix-style EIA.
-- Kerf offset computed in the path (no G41/G42).
-- Outside contour cut clockwise so the good side of the cut faces the part.
-- Straight lead-in/lead-out on the bottom edge, pierce point off the part.
-
-Coordinates: inches. X/Y origin = bottom-left corner of the body (tenon
-extends to X -0.875).
+Coordinates: inches, all positive. The part's bounding box (including the
+tenons) starts at (MARGIN, MARGIN) from the table origin.
 
 Requires: pip install shapely ezdxf matplotlib
 Run: python gcode.py  ->  laminated_panel.gm
 """
 from pathlib import Path
 
-from shapely.geometry import LineString, Point, Polygon
+from shapely.affinity import translate
+from shapely.geometry import Polygon
 
 from generate import LENGTH, TENON_LEN, layer_bounds, profile_points
 
 OUT = Path(__file__).parent / "laminated_panel.gm"
 
-# ---- Cut parameters (ASSUMED, edit to suit the table) ----------------------
-MATERIAL = "16 GA MILD STEEL, 0.0598 IN"
-KERF = 0.060             # kerf width; path is offset by KERF / 2
-FEED = 150.0             # in/min cut speed
-LEAD_LEN = 0.25          # straight lead-in/out length, perpendicular to edge
-LEAD_X = 10.0            # X position of the lead-in on the bottom edge
-TORCH_ON = "M07"
-TORCH_OFF = "M08"
-ARC_SEGMENTS = 8         # segments per quarter circle on outside corners
+# ---- Cut parameters (match shop file; edit to suit) ------------------------
+PATH_OFFSET = 0.030      # torch path inset toward the part side
+FEED = 60.0              # in/min, same as PLT-47x47_RevE
+MARGIN = 0.5             # part bounding box offset from table origin
+LEAD_LEN = 0.25          # straight lead-in length from pierce point
+LEAD_X = 10.0            # lead-in position along the bottom edge (part X)
+OVERCUT = 0.125          # cut past the start point before torch off
 
 
 def part_outline():
@@ -49,49 +47,47 @@ def part_outline():
 
 
 def toolpath():
-    """Kerf-offset path, clockwise, starting at the bottom edge at LEAD_X."""
-    ring = part_outline().buffer(KERF / 2, quad_segs=ARC_SEGMENTS,
-                                 join_style="round").exterior
+    """Torch path: outline inset by PATH_OFFSET, clockwise, placed at MARGIN,
+    starting on the bottom edge at LEAD_X."""
+    part = translate(part_outline(), MARGIN + TENON_LEN, MARGIN)
+    ring = part.buffer(-PATH_OFFSET, join_style="mitre").exterior
     if ring.is_ccw:
         ring = ring.reverse()
     coords = list(ring.coords)[:-1]
-    # split the bottom-edge segment that crosses LEAD_X and start there
-    y_bot = -KERF / 2
+    y_bot = MARGIN + PATH_OFFSET
+    x_start = MARGIN + TENON_LEN + LEAD_X
     for i in range(len(coords)):
         (ax, ay), (bx, by) = coords[i], coords[(i + 1) % len(coords)]
         if abs(ay - y_bot) < 1e-9 and abs(by - y_bot) < 1e-9 \
-                and min(ax, bx) < LEAD_X < max(ax, bx):
-            start = (LEAD_X, y_bot)
-            seq = coords[i + 1:] + coords[:i + 1]
-            return [start] + seq + [start]
+                and min(ax, bx) < x_start < max(ax, bx):
+            start = (x_start, y_bot)
+            return [start] + coords[i + 1:] + coords[:i + 1] + [start]
     raise ValueError("lead-in point not on bottom edge")
 
 
 def fmt(v):
-    return f"{v:.4f}"
+    return f"{v:.3f}"
 
 
 def build():
     path = toolpath()
     sx, sy = path[0]
-    pierce = (sx, sy - LEAD_LEN)
+    nx, _ = path[1]
+    direction = -1 if nx < sx else 1
     lines = [
-        "(LAMINATED PANEL - PLASMA OUTSIDE PROFILE)",
-        f"(MATERIAL: {MATERIAL})",
-        f"(KERF {KERF} IN, OFFSET APPLIED IN PATH)",
-        "(XY0 = BOTTOM-LEFT CORNER OF BODY)",
-        "G20",
+        "G70",
         "G90",
-        f"G0 X{fmt(pierce[0])} Y{fmt(pierce[1])}",
-        TORCH_ON,
-        f"G1 X{fmt(sx)} Y{fmt(sy)} F{FEED:.0f}",
+        "M06 T1",
+        f"G00 X{fmt(sx)} Y{fmt(sy - LEAD_LEN)}",
+        "M64",
+        f"G01 X{fmt(sx)} Y{fmt(sy)} F{FEED:.3f}",
     ]
-    lines += [f"G1 X{fmt(x)} Y{fmt(y)}" for x, y in path[1:]]
+    lines += [f"G01 X{fmt(x)} Y{fmt(y)}" for x, y in path[1:]]
     lines += [
-        f"G1 X{fmt(pierce[0] + LEAD_LEN)} Y{fmt(pierce[1])}",
-        TORCH_OFF,
-        "G0 X0.0000 Y0.0000",
-        "M30",
+        f"G01 X{fmt(sx + direction * OVERCUT)} Y{fmt(sy)}",
+        "M65",
+        "G00 X0.000 Y0.000",
+        "M02",
     ]
     return "\n".join(lines) + "\n"
 
