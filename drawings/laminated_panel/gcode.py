@@ -6,7 +6,7 @@ outside contour from 16 ga sheet.
 Plasma conventions used:
 - XY only. No Z words, no spindle speed: torch height and pierce delay are
   left to the table's THC/controller settings.
-- M3 = torch on, M5 = torch off.
+- M07 = cut (torch) on, M08 = cut off, per Hypertherm/Phoenix-style EIA.
 - Kerf offset computed in the path (no G41/G42).
 - Outside contour cut clockwise so the good side of the cut faces the part.
 - Straight lead-in/lead-out on the bottom edge, pierce point off the part.
@@ -31,6 +31,8 @@ KERF = 0.060             # kerf width; path is offset by KERF / 2
 FEED = 150.0             # in/min cut speed
 LEAD_LEN = 0.25          # straight lead-in/out length, perpendicular to edge
 LEAD_X = 10.0            # X position of the lead-in on the bottom edge
+TORCH_ON = "M07"
+TORCH_OFF = "M08"
 ARC_SEGMENTS = 8         # segments per quarter circle on outside corners
 
 
@@ -81,13 +83,13 @@ def build():
         "G20",
         "G90",
         f"G0 X{fmt(pierce[0])} Y{fmt(pierce[1])}",
-        "M3",
+        TORCH_ON,
         f"G1 X{fmt(sx)} Y{fmt(sy)} F{FEED:.0f}",
     ]
     lines += [f"G1 X{fmt(x)} Y{fmt(y)}" for x, y in path[1:]]
     lines += [
         f"G1 X{fmt(pierce[0] + LEAD_LEN)} Y{fmt(pierce[1])}",
-        "M5",
+        TORCH_OFF,
         "G0 X0.0000 Y0.0000",
         "M30",
     ]
