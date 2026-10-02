@@ -1,33 +1,37 @@
-"""Generate CNC G-code (.gm) for the laminated panel outer profile.
+"""Generate plasma-cutter G-code (.gm) for the laminated panel outline.
 
 Cuts the full side-elevation silhouette (body, top profile, both tenons) as one
-outside contour, with the tool offset computed here (no G41/G42), so the file
-runs on GRBL, Mach3/4 and Fanuc-style controllers.
+outside contour from 16 ga sheet.
+
+Plasma conventions used:
+- XY only. No Z words, no spindle speed: torch height and pierce delay are
+  left to the table's THC/controller settings.
+- M3 = torch on, M5 = torch off.
+- Kerf offset computed in the path (no G41/G42).
+- Outside contour cut clockwise so the good side of the cut faces the part.
+- Straight lead-in/lead-out on the bottom edge, pierce point off the part.
 
 Coordinates: inches. X/Y origin = bottom-left corner of the body (tenon
-extends to X -0.875). Z0 = top of stock.
+extends to X -0.875).
 
 Requires: pip install shapely ezdxf matplotlib
 Run: python gcode.py  ->  laminated_panel.gm
 """
 from pathlib import Path
 
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from generate import LENGTH, TENON_LEN, layer_bounds, profile_points
 
 OUT = Path(__file__).parent / "laminated_panel.gm"
 
-# ---- Machining parameters (ASSUMED, edit to suit the machine) --------------
-TOOL_DIA = 0.25          # flat end mill
-STOCK_THICKNESS = 0.0598 # 16 ga steel sheet
-BREAKTHROUGH = 0.02      # extra depth below stock bottom (into spoilboard)
-STEP_DOWN = 0.25         # depth per pass
-SAFE_Z = 0.5
-FEED = 100.0             # in/min, cutting
-PLUNGE = 30.0            # in/min, plunge
-SPINDLE_RPM = 18000
-ARC_SEGMENTS = 16        # segments per quarter circle on rounded outside corners
+# ---- Cut parameters (ASSUMED, edit to suit the table) ----------------------
+MATERIAL = "16 GA MILD STEEL, 0.0598 IN"
+KERF = 0.060             # kerf width; path is offset by KERF / 2
+FEED = 150.0             # in/min cut speed
+LEAD_LEN = 0.25          # straight lead-in/out length, perpendicular to edge
+LEAD_X = 10.0            # X position of the lead-in on the bottom edge
+ARC_SEGMENTS = 8         # segments per quarter circle on outside corners
 
 
 def part_outline():
@@ -43,27 +47,22 @@ def part_outline():
 
 
 def toolpath():
-    """Tool-center path: outline offset outward by tool radius, CCW
-    (conventional cut with M3), starting at the bottom-left corner."""
-    path = part_outline().buffer(TOOL_DIA / 2, quad_segs=ARC_SEGMENTS,
+    """Kerf-offset path, clockwise, starting at the bottom edge at LEAD_X."""
+    ring = part_outline().buffer(KERF / 2, quad_segs=ARC_SEGMENTS,
                                  join_style="round").exterior
-    if not path.is_ccw:
-        path = path.reverse()
-    coords = list(path.coords)[:-1]
-    start = min(range(len(coords)),
-                key=lambda i: coords[i][0] + coords[i][1])
-    coords = coords[start:] + coords[:start]
-    return coords + [coords[0]]
-
-
-def depth_levels():
-    final = -(STOCK_THICKNESS + BREAKTHROUGH)
-    z, levels = 0.0, []
-    while z - STEP_DOWN > final + 1e-9:
-        z -= STEP_DOWN
-        levels.append(round(z, 4))
-    levels.append(round(final, 4))
-    return levels
+    if ring.is_ccw:
+        ring = ring.reverse()
+    coords = list(ring.coords)[:-1]
+    # split the bottom-edge segment that crosses LEAD_X and start there
+    y_bot = -KERF / 2
+    for i in range(len(coords)):
+        (ax, ay), (bx, by) = coords[i], coords[(i + 1) % len(coords)]
+        if abs(ay - y_bot) < 1e-9 and abs(by - y_bot) < 1e-9 \
+                and min(ax, bx) < LEAD_X < max(ax, bx):
+            start = (LEAD_X, y_bot)
+            seq = coords[i + 1:] + coords[:i + 1]
+            return [start] + seq + [start]
+    raise ValueError("lead-in point not on bottom edge")
 
 
 def fmt(v):
@@ -72,25 +71,26 @@ def fmt(v):
 
 def build():
     path = toolpath()
-    x0, y0 = path[0]
+    sx, sy = path[0]
+    pierce = (sx, sy - LEAD_LEN)
     lines = [
-        "%",
-        "(LAMINATED PANEL - OUTSIDE PROFILE)",
-        "(SOURCE: HAND SKETCH, SEE laminated_panel.pdf FOR ASSUMPTIONS)",
-        f"(TOOL: {TOOL_DIA} IN FLAT END MILL, OFFSET APPLIED IN PATH)",
-        f"(STOCK: 16 GA = {STOCK_THICKNESS} IN, Z0 = TOP OF STOCK)",
-        "(XY0 = BOTTOM-LEFT CORNER OF BODY, TENON AT X-0.875)",
-        "G20 G90 G17 G94",
-        f"M3 S{SPINDLE_RPM}",
-        f"G0 Z{fmt(SAFE_Z)}",
-        f"G0 X{fmt(x0)} Y{fmt(y0)}",
+        "(LAMINATED PANEL - PLASMA OUTSIDE PROFILE)",
+        f"(MATERIAL: {MATERIAL})",
+        f"(KERF {KERF} IN, OFFSET APPLIED IN PATH)",
+        "(XY0 = BOTTOM-LEFT CORNER OF BODY)",
+        "G20",
+        "G90",
+        f"G0 X{fmt(pierce[0])} Y{fmt(pierce[1])}",
+        "M3",
+        f"G1 X{fmt(sx)} Y{fmt(sy)} F{FEED:.0f}",
     ]
-    for z in depth_levels():
-        lines.append(f"(PASS Z{fmt(z)})")
-        lines.append(f"G1 Z{fmt(z)} F{PLUNGE:.0f}")
-        lines.append(f"G1 X{fmt(path[1][0])} Y{fmt(path[1][1])} F{FEED:.0f}")
-        lines += [f"X{fmt(x)} Y{fmt(y)}" for x, y in path[2:]]
-    lines += [f"G0 Z{fmt(SAFE_Z)}", "M5", "G0 X0 Y0", "M30", "%"]
+    lines += [f"G1 X{fmt(x)} Y{fmt(y)}" for x, y in path[1:]]
+    lines += [
+        f"G1 X{fmt(pierce[0] + LEAD_LEN)} Y{fmt(pierce[1])}",
+        "M5",
+        "G0 X0.0000 Y0.0000",
+        "M30",
+    ]
     return "\n".join(lines) + "\n"
 
 
