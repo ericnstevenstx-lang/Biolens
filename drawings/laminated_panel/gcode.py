@@ -20,7 +20,7 @@ OUT = Path(__file__).parent / "laminated_panel.gm"
 
 # ---- Machining parameters (ASSUMED, edit to suit the machine) --------------
 TOOL_DIA = 0.25          # flat end mill
-STOCK_THICKNESS = 0.75   # cut depth to get through the stock
+STOCK_THICKNESS = 0.0598 # 16 ga steel sheet
 BREAKTHROUGH = 0.02      # extra depth below stock bottom (into spoilboard)
 STEP_DOWN = 0.25         # depth per pass
 SAFE_Z = 0.5
@@ -78,7 +78,7 @@ def build():
         "(LAMINATED PANEL - OUTSIDE PROFILE)",
         "(SOURCE: HAND SKETCH, SEE laminated_panel.pdf FOR ASSUMPTIONS)",
         f"(TOOL: {TOOL_DIA} IN FLAT END MILL, OFFSET APPLIED IN PATH)",
-        f"(STOCK: {STOCK_THICKNESS} IN, Z0 = TOP OF STOCK)",
+        f"(STOCK: 16 GA = {STOCK_THICKNESS} IN, Z0 = TOP OF STOCK)",
         "(XY0 = BOTTOM-LEFT CORNER OF BODY, TENON AT X-0.875)",
         "G20 G90 G17 G94",
         f"M3 S{SPINDLE_RPM}",
