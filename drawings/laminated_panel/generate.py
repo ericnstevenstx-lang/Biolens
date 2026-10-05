@@ -28,19 +28,24 @@ TENON_LEN = 0.875           # core extends past each end
 PROFILE_START = 1.625       # left end -> start of raised profile
 PROFILE_LEN = 33.5          # raised profile length at base
 STEP_LEN = 3.0              # first step length, measured from profile start
-H_STEP = 5 / 16             # step height above layer D face
-H_RISER = 9 / 16            # top of vertical riser
-H_TOP = 3 / 4               # top flat (full-height section, reduced from 13/16)
+# Profile edge segments, each stacked on the previous (per GE sample photos):
+CHAMFER_H = 5 / 16          # 45 deg chamfer up from the low edge
+RISER_H = 9 / 16            # vertical step at the end of the 3" flat
+SLOPE_H = 3 / 4             # 45 deg slope to the full-height section
+                            # (sketch 13/16, reduced to 3/4)
+H_STEP = CHAMFER_H                      # level of the 3" flat
+H_RISER = H_STEP + RISER_H              # top of vertical step
+H_TOP = H_RISER + SLOPE_H               # full-height section
 NOTCH_WIDTH = 4 + 9 / 16    # center notch, width at top flat
 NOTCH_DEPTH = 0.25          # ASSUMED, not dimensioned on sketch
 # Chamfers / slopes are not dimensioned on the sketch: 45 degrees assumed.
 
 ASSUMPTIONS = [
     "Transcribed from hand sketch. Verify before fabrication.",
-    "All dims in inches. Profile heights measured from top face of layer D.",
+    "All dims in inches. Profile edge heights are chained: 5/16 + 9/16 + 3/4.",
     "1 5/8 + 33 1/2 + 9 1/8 = 44 1/4: raised profile spans 33 1/2 at base.",
     "3\" steps measured from profile start/end to the vertical riser.",
-    "Chamfer (0 -> 5/16) and slope (9/16 -> 3/4) assumed 45 deg.",
+    "Chamfer (5/16) and slope (3/4) at 45 deg, per GE sample.",
     "Center notch: 4 9/16 wide, centered on profile, 1/4 deep (depth ASSUMED).",
     "Core tenon 3/4 x 7/8 both ends, assumed flush with core faces.",
 ]
@@ -202,7 +207,7 @@ def build():
 
     # ---- Detail A: left end, 3:1 -----------------------------------------
     s, xa0, xa1 = 3.0, -1.5, 6.0
-    org = (0, -22.0)
+    org = (0, -25.0)
     tf = make_tf(org, s, xa0)
     draw_part(msp, org, s, (xa0, xa1))
     for name, txt in (("A", "3/8"), ("B", "7/8"), ("C_CORE", "3/4"),
@@ -214,19 +219,21 @@ def build():
             "1 5/8")
     add_dim(msp, tf(x0, t_body), tf(x0 + STEP_LEN, t_body + H_RISER),
             (0, tf(0, yt + 0.9)[1]), "3\"")
-    for i, (xp, h, txt) in enumerate((
-            (x0 + H_STEP, H_STEP, "5/16"),
-            (x0 + STEP_LEN, H_RISER, "9/16"),
-            (x0 + STEP_LEN + H_TOP - H_RISER, H_TOP, "3/4"))):
-        add_dim(msp, tf(xp, t_body + h), tf(xa1, t_body),
-                (tf(xa1 - 0.9 + i * 0.35, 0)[0], 0), txt, angle=90)
+    xs = x0 + STEP_LEN + H_TOP - H_RISER
+    for lo, hi, xp, txt in ((0.0, H_STEP, x0 + H_STEP, "5/16"),
+                            (H_STEP, H_RISER, x0 + STEP_LEN, "9/16"),
+                            (H_RISER, H_TOP, xs, "3/4")):
+        add_dim(msp, tf(xp, t_body + lo), tf(xp, t_body + hi),
+                (tf(xs + 0.5, 0)[0], 0), txt, angle=90)
+    add_dim(msp, tf(xs, t_body), tf(xs, yt), (tf(xs + 1.0, 0)[0], 0),
+            "1 5/8", angle=90)
     label(msp, "DETAIL A - LEFT END  (SCALE 3:1)", tf(xa0, -0.9), 0.3)
     label(msp, "Right end mirrors left end (9 1/8 from end to profile).",
           tf(xa0, -1.1), 0.22)
 
     # ---- Detail B: center notch, 3:1 -------------------------------------
     xb0, xb1 = mid - 4.0, mid + 4.0
-    org_b = (28.0, -22.0)
+    org_b = (28.0, -25.0)
     tfb = make_tf(org_b, s, xb0)
     draw_part(msp, org_b, s, (xb0, xb1))
     add_dim(msp, tfb(n0, yt), tfb(n1, yt), (0, tfb(0, yt + 0.6)[1]),
@@ -234,7 +241,7 @@ def build():
     add_dim(msp, tfb(n1, yt), tfb(n1 - NOTCH_DEPTH, yt - NOTCH_DEPTH),
             (tfb(n1 + 0.6, 0)[0], 0), "1/4 ASSUMED", angle=90)
     add_dim(msp, tfb(n1, yt), tfb(xb1, t_body),
-            (tfb(xb1 + 0.3, 0)[0], 0), "3/4", angle=90)
+            (tfb(xb1 + 0.3, 0)[0], 0), "1 5/8", angle=90)
     label(msp, "DETAIL B - CENTER NOTCH  (SCALE 3:1)", tfb(xb0, -0.9), 0.3)
     label(msp, "Notch centered on 33 1/2 profile, 45 deg sides.",
           tfb(xb0, -1.1), 0.22)
