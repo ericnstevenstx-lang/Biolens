@@ -30,7 +30,7 @@ PROFILE_LEN = 33.5          # raised profile length at base
 STEP_LEN = 3.0              # first step length, measured from profile start
 H_STEP = 5 / 16             # step height above layer D face
 H_RISER = 9 / 16            # top of vertical riser
-H_TOP = 13 / 16             # top flat
+H_TOP = 3 / 4               # top flat (full-height section, reduced from 13/16)
 NOTCH_WIDTH = 4 + 9 / 16    # center notch, width at top flat
 NOTCH_DEPTH = 0.25          # ASSUMED, not dimensioned on sketch
 # Chamfers / slopes are not dimensioned on the sketch: 45 degrees assumed.
@@ -40,7 +40,7 @@ ASSUMPTIONS = [
     "All dims in inches. Profile heights measured from top face of layer D.",
     "1 5/8 + 33 1/2 + 9 1/8 = 44 1/4: raised profile spans 33 1/2 at base.",
     "3\" steps measured from profile start/end to the vertical riser.",
-    "Chamfer (0 -> 5/16) and slope (9/16 -> 13/16) assumed 45 deg.",
+    "Chamfer (0 -> 5/16) and slope (9/16 -> 3/4) assumed 45 deg.",
     "Center notch: 4 9/16 wide, centered on profile, 1/4 deep (depth ASSUMED).",
     "Core tenon 3/4 x 7/8 both ends, assumed flush with core faces.",
 ]
@@ -217,7 +217,7 @@ def build():
     for i, (xp, h, txt) in enumerate((
             (x0 + H_STEP, H_STEP, "5/16"),
             (x0 + STEP_LEN, H_RISER, "9/16"),
-            (x0 + STEP_LEN + H_TOP - H_RISER, H_TOP, "13/16"))):
+            (x0 + STEP_LEN + H_TOP - H_RISER, H_TOP, "3/4"))):
         add_dim(msp, tf(xp, t_body + h), tf(xa1, t_body),
                 (tf(xa1 - 0.9 + i * 0.35, 0)[0], 0), txt, angle=90)
     label(msp, "DETAIL A - LEFT END  (SCALE 3:1)", tf(xa0, -0.9), 0.3)
@@ -234,7 +234,7 @@ def build():
     add_dim(msp, tfb(n1, yt), tfb(n1 - NOTCH_DEPTH, yt - NOTCH_DEPTH),
             (tfb(n1 + 0.6, 0)[0], 0), "1/4 ASSUMED", angle=90)
     add_dim(msp, tfb(n1, yt), tfb(xb1, t_body),
-            (tfb(xb1 + 0.3, 0)[0], 0), "13/16", angle=90)
+            (tfb(xb1 + 0.3, 0)[0], 0), "3/4", angle=90)
     label(msp, "DETAIL B - CENTER NOTCH  (SCALE 3:1)", tfb(xb0, -0.9), 0.3)
     label(msp, "Notch centered on 33 1/2 profile, 45 deg sides.",
           tfb(xb0, -1.1), 0.22)
