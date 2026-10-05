@@ -31,8 +31,7 @@ STEP_LEN = 3.0              # first step length, measured from profile start
 # Profile edge segments, each stacked on the previous (per GE sample photos):
 CHAMFER_H = 5 / 16          # 45 deg chamfer up from the low edge
 RISER_H = 9 / 16            # vertical step at the end of the 3" flat
-SLOPE_H = 3 / 4             # 45 deg slope to the full-height section
-                            # (sketch 13/16, reduced to 3/4)
+SLOPE_H = 13 / 16           # 45 deg slope to the full-height section
 H_STEP = CHAMFER_H                      # level of the 3" flat
 H_RISER = H_STEP + RISER_H              # top of vertical step
 H_TOP = H_RISER + SLOPE_H               # full-height section
@@ -42,10 +41,10 @@ NOTCH_DEPTH = 0.25          # ASSUMED, not dimensioned on sketch
 
 ASSUMPTIONS = [
     "Transcribed from hand sketch. Verify before fabrication.",
-    "All dims in inches. Profile edge heights are chained: 5/16 + 9/16 + 3/4.",
+    "All dims in inches. Profile edge heights are chained: 5/16 + 9/16 + 13/16.",
     "1 5/8 + 33 1/2 + 9 1/8 = 44 1/4: raised profile spans 33 1/2 at base.",
     "3\" steps measured from profile start/end to the vertical riser.",
-    "Chamfer (5/16) and slope (3/4) at 45 deg, per GE sample.",
+    "Chamfer (5/16) and slope (13/16) at 45 deg, per GE sample.",
     "Center notch: 4 9/16 wide, centered on profile, 1/4 deep (depth ASSUMED).",
     "Core tenon 3/4 x 7/8 both ends, assumed flush with core faces.",
 ]
@@ -222,11 +221,11 @@ def build():
     xs = x0 + STEP_LEN + H_TOP - H_RISER
     for lo, hi, xp, txt in ((0.0, H_STEP, x0 + H_STEP, "5/16"),
                             (H_STEP, H_RISER, x0 + STEP_LEN, "9/16"),
-                            (H_RISER, H_TOP, xs, "3/4")):
+                            (H_RISER, H_TOP, xs, "13/16")):
         add_dim(msp, tf(xp, t_body + lo), tf(xp, t_body + hi),
                 (tf(xs + 0.5, 0)[0], 0), txt, angle=90)
     add_dim(msp, tf(xs, t_body), tf(xs, yt), (tf(xs + 1.0, 0)[0], 0),
-            "1 5/8", angle=90)
+            "1 11/16", angle=90)
     label(msp, "DETAIL A - LEFT END  (SCALE 3:1)", tf(xa0, -0.9), 0.3)
     label(msp, "Right end mirrors left end (9 1/8 from end to profile).",
           tf(xa0, -1.1), 0.22)
@@ -241,7 +240,7 @@ def build():
     add_dim(msp, tfb(n1, yt), tfb(n1 - NOTCH_DEPTH, yt - NOTCH_DEPTH),
             (tfb(n1 + 0.6, 0)[0], 0), "1/4 ASSUMED", angle=90)
     add_dim(msp, tfb(n1, yt), tfb(xb1, t_body),
-            (tfb(xb1 + 0.3, 0)[0], 0), "1 5/8", angle=90)
+            (tfb(xb1 + 0.3, 0)[0], 0), "1 11/16", angle=90)
     label(msp, "DETAIL B - CENTER NOTCH  (SCALE 3:1)", tfb(xb0, -0.9), 0.3)
     label(msp, "Notch centered on 33 1/2 profile, 45 deg sides.",
           tfb(xb0, -1.1), 0.22)
