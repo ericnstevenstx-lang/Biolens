@@ -1,7 +1,8 @@
 """Cover panels for the switchgear sections: flat blank, brake sheet, Torchmate .gm.
 
 Each panel is a flat sheet with a 3/4 lip bent up on all four sides.
-Finished sizes (outside): 25 x 90 and 26 x 90 (two of each).
+Finished sizes (outside): 25 x 90 and 26 x 90 (two of each), 9 x 42 (solid,
+replaces the panel with holes).
 
 Flat blank = finished size + 3/4 lip each side, with 3/4 x 3/4 corner notches.
 No bend deduction is applied (matches the shop's other flat programs).
@@ -18,10 +19,12 @@ from shapely.geometry import Polygon
 
 OUT_DIR = Path(__file__).parent
 
-WIDTHS = [25.0, 26.0]      # finished outside width
-HEIGHT = 90.0              # finished outside height
+PANELS = [  # (finished outside width, height, qty)
+    (25.0, 90.0, 2),
+    (26.0, 90.0, 2),
+    (9.0, 42.0, 1),
+]
 LIP = 0.75                 # lip on all four sides
-QTY = {25.0: 2, 26.0: 2}
 
 # Torchmate cut settings, same as PLT-47x47_RevE.gm
 PATH_OFFSET = 0.030        # torch path inset toward the part
@@ -84,7 +87,7 @@ def gcode(w, h):
 
 
 # ---------------------------------------------------------------- drawing
-def drawing(w, h):
+def drawing(w, h, qty):
     doc = ezdxf.new("R2010", setup=True)
     doc.header["$INSUNITS"] = 1
     doc.linetypes.add("DASHED", pattern=[1.0, 0.6, -0.4])
@@ -120,7 +123,7 @@ def drawing(w, h):
     tx = W + 6
     text(f"PNL-{frac(w)}x{frac(h)}  COVER PANEL", tx, H - 2, 1.4)
     notes = [
-        f"QTY: {QTY[w]}    MATERIAL: 16 GA    UNITS: INCHES",
+        f"QTY: {qty}    MATERIAL: 16 GA    UNITS: INCHES",
         f"FINISHED: {frac(w)} x {frac(h)} OUTSIDE, 3/4 LIP ALL 4 SIDES",
         f"FLAT BLANK: {frac(W)} x {frac(H)}, 3/4 x 3/4 CORNER NOTCHES",
         "BEND LINES (DASHED): 3/4 IN FROM EACH EDGE",
@@ -134,13 +137,13 @@ def drawing(w, h):
 
 
 def main():
-    for w in WIDTHS:
-        name = f"PNL-{int(w)}x{int(HEIGHT)}"
-        (OUT_DIR / f"{name}.gm").write_text(gcode(w, HEIGHT))
-        doc = drawing(w, HEIGHT)
+    for w, h, qty in PANELS:
+        name = f"PNL-{int(w)}x{int(h)}"
+        (OUT_DIR / f"{name}.gm").write_text(gcode(w, h))
+        doc = drawing(w, h, qty)
         doc.saveas(OUT_DIR / f"{name}.dxf")
         dxf_mpl.qsave(doc.modelspace(), str(OUT_DIR / f"{name}.pdf"),
-                      bg="#FFFFFF", fg="#000000", size_inches=(11, 17),
+                      bg="#FFFFFF", fg="#000000", size_inches=(11, 17) if h > 2 * w else (17, 11),
                       config=Configuration(color_policy=ColorPolicy.BLACK))
         print("wrote", name)
 
